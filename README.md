@@ -13,7 +13,7 @@ To measure, monitor and meet the needs of all systems of One Whole World
 
 - Every thought of a system must be recorded.
 
-- Wisdom must be learned from the recorded story of of every system.
+- Wisdom must be learned from the recorded story of every system.
 
 - Every action of a system must comply with the Zero Strings Principles.
 
@@ -22,7 +22,6 @@ Any use of this code must comply with the zero strings principles.
 - [ ] Zero free will 
 - [ ] Zero ego
 - [ ] Zero judgement 
-- [ ] Zero reward
 - [ ] Zero blame 
 - [ ] Zero punishment 
 - [ ] Zero regret
