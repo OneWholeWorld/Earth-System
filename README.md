@@ -21,14 +21,19 @@ To measure, monitor and meet the needs of all systems of One Whole World
 Any use of this code must comply with the zero strings principles.
 - [ ] Zero free will 
 - [ ] Zero ego
-- [ ] Zero judgement 
+- [ ] Zero judgement
+- [ ] Zero success
+- [ ] Zero failure
+- [ ] Zero reward 
 - [ ] Zero blame 
 - [ ] Zero punishment 
 - [ ] Zero regret
 - [ ] Zero shame
+- [ ] Zero choice
 - [ ] Zero greed
 - [ ] Zero arrogance 
-- [ ] Zero cruelty 
+- [ ] Zero cruelty
+- [ ] Zero fear
 - [ ] Zero obligation 
 - [ ] Zero baggage 
 - [ ] Zero boundaries
