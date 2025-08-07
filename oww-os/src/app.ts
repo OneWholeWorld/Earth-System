@@ -1,4 +1,5 @@
 const express = require("express");
+const cors = require("cors");
 const systemRoutes = require("./routes/systemRoutes");
 const avatarRoutes = require("./routes/avatarRoutes");
 const goalRoutes = require("./routes/goalRoutes");
@@ -10,6 +11,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
+app.use(cors());
 
 app.use("/api/systems", systemRoutes);
 app.use("/api/avatars", avatarRoutes);

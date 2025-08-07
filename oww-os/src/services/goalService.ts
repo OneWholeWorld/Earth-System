@@ -17,6 +17,12 @@ export const createGoal = async (avatarId: any, description: any) => {
   return goal;
 };
 
+const getAllGoals = async () => {
+  return await prisma.goal.findMany({
+    include: { avatar: true, needs: true },
+  });
+};
+
 const getGoalById = async (id: any) => {
   return await prisma.goal.findUnique({
     where: { id },
@@ -48,6 +54,7 @@ const updateGoalStatus = async (id: any, status: any) => {
 module.exports = {
   createGoal,
   getGoalById,
+  getAllGoals,
   getGoalsByAvatarId,
   updateGoalStatus,
 };

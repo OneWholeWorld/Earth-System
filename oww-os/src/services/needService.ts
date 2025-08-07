@@ -17,6 +17,15 @@ export const createNeed = async (goalId: any, description: any) => {
   return need;
 };
 
+const getAllNeeds = async () => {
+  return await prisma.need.findMany({
+    include: {
+      goal: true,
+      mappings: { include: { fulfillerSystem: true, fulfillerAvatar: true } },
+    },
+  });
+};
+
 const getNeedById = async (id: any) => {
   return await prisma.need.findUnique({
     where: { id },
@@ -38,6 +47,7 @@ const getNeedsByGoalId = async (goalId: any) => {
 
 module.exports = {
   createNeed,
+  getAllNeeds,
   getNeedById,
   getNeedsByGoalId,
 };

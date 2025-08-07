@@ -10,6 +10,18 @@ const createGoal = async (req: any, res: any) => {
   }
 };
 
+const getAllGoal = async (req: any, res: any) => {
+  try {
+    const goal = await goalService.getAllGoals();
+    if (!goal) {
+      return res.status(404).json({ message: "Goal not found" });
+    }
+    res.status(200).json(goal);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 const getGoal = async (req: any, res: any) => {
   try {
     const { id } = req.params;
@@ -46,6 +58,7 @@ const updateGoalStatus = async (req: any, res: any) => {
 
 module.exports = {
   createGoal,
+  getAllGoal,
   getGoal,
   getGoalsForAvatar,
   updateGoalStatus,
