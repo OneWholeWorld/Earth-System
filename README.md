@@ -7,7 +7,9 @@ To measure, monitor and meet the needs of all systems of One Whole World
 ## One Whole World
 - A singular system measuring, monitoring and meeting every need of its sub-systems with seamless and absolute precision.
 
-- Systems must compete for the best solution to meet a need.
+- Systems must collaborate to create the best solution to meet a need.
+
+- A need must be met through the path of least action.
 
 - Every moment of the life of a system must be recorded.
 
@@ -19,7 +21,7 @@ To measure, monitor and meet the needs of all systems of One Whole World
 
 ## Zero Strings Principles
 Any use of this code must comply with the zero strings principles.
-- [ ] Zero free will 
+- [ ] Zero conscious will 
 - [ ] Zero ego
 - [ ] Zero judgement
 - [ ] Zero success
