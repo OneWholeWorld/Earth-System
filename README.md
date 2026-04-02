@@ -11,9 +11,9 @@ To measure, monitor and meet the needs of all systems of One Whole World
 
 - A need must be met through the path of least action.
 
-- Every moment of the life of a system must be recorded.
+- Every Frame of the life of a system must be recorded.
 
-- Every thought of a system must be recorded.
+- All mission critical life support systems must be redundant. 
 
 - Wisdom must be learned from the recorded story of every system.
 
@@ -21,6 +21,8 @@ To measure, monitor and meet the needs of all systems of One Whole World
 
 ## Zero Strings Principles
 Any use of this code must comply with the zero strings principles.
+- [ ] Zero cruelty
+- [ ] Zero secrets
 - [ ] Zero conscious will 
 - [ ] Zero ego
 - [ ] Zero judgement
@@ -34,11 +36,9 @@ Any use of this code must comply with the zero strings principles.
 - [ ] Zero choice
 - [ ] Zero greed
 - [ ] Zero arrogance 
-- [ ] Zero cruelty
 - [ ] Zero fear
 - [ ] Zero obligation 
 - [ ] Zero baggage 
 - [ ] Zero boundaries
-- [ ] Zero secrets
 - [ ] Zero privacy 
 
