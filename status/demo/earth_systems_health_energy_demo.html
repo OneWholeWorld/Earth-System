@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>globe.take75 — Expanded Synchronized Pulses & Health Heatmap</title>
+<style>
+html,body{margin:0;overflow:hidden;background:black}
+canvas{display:block}
+#hud{
+  position:fixed;left:16px;top:16px;z-index:10;
+  padding:10px 12px;border-radius:12px;
+  background:rgba(8,12,24,.55);backdrop-filter:blur(10px);
+  color:#eef4ff;font:12px/1.4 Inter,system-ui,sans-serif;
+  border:1px solid rgba(255,255,255,.12);
+  min-width: 180px;
+}
+#showConnectionsBtn, #showHealthBtn{
+  display:block;
+  margin-top:10px;
+  width:100%;
+  border:none;
+  border-radius:10px;
+  padding:9px 10px;
+  cursor:pointer;
+  color:white;
+  font:600 12px/1.2 Inter,system-ui,sans-serif;
+  background:rgba(255,255,255,.12);
+  transition: all 0.2s ease;
+}
+#showConnectionsBtn:hover, #showHealthBtn:hover {
+  background:rgba(255,255,255,.2);
+}
+#showConnectionsBtn.active{
+  background:rgba(212,175,55,.85);
+  color:#111827;
+}
+#showHealthBtn.active{
+  background:rgba(220, 38, 38, 0.85); 
+  color:#ffffff;
+}
+
+#inspectPanel{
+  position:fixed;
+  top:16px;
+  right:16px;
+  width:280px;
+  z-index:20;
+  padding:14px 16px;
+  border-radius:16px;
+  background:rgba(8,12,24,.72);
+  backdrop-filter:blur(12px);
+  border:1px solid rgba(255,255,255,.12);
+  color:#eef4ff;
+  font:13px/1.4 Inter,system-ui,sans-serif;
+  display:none;
+}
+#inspectPanel.visible{display:block}
+#inspectPanel h3{
+  margin:0 0 6px 0;
+  font-size:16px;
+}
+#inspectPanel p{
+  margin:0 0 12px 0;
+  color:#bcd0f5;
+  font-size:12px;
+}
+.inspectBtns{display:flex;gap:8px}
+.inspectBtns button{
+  flex:1;
+  border:none;
+  border-radius:10px;
+  padding:10px 12px;
+  cursor:pointer;
+  color:white;
+  font-weight:600;
+}
+#satisfiedBtn{background:#16a34a}
+#notSatisfiedBtn{background:#dc2626}
+
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">
+  <button id="showConnectionsBtn">Show Energy</button>
+  <button id="showHealthBtn">Show Health</button>
+</div>
+
+<div id="inspectPanel">
+  <h3>Inspect System</h3>
+  <p>Set the system state.</p>
+  <div class="inspectBtns">
+    <button id="satisfiedBtn">Satisfied</button>
+    <button id="notSatisfiedBtn">Not Satisfied</button>
+  </div>
+</div>
+
+<script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+<script>
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+// ===== CAMERA ORBIT =====
+const orbit = {
+  radius: 3.1,
+  theta: 0,
+  phi: 0.22
+};
+
+function updateCamera() {
+  const r = orbit.radius;
+  const cp = Math.cos(orbit.phi);
+  camera.position.set(
+    Math.sin(orbit.theta) * cp * r,
+    Math.sin(orbit.phi) * r,
+    Math.cos(orbit.theta) * cp * r
+  );
+  camera.lookAt(0, 0, 0);
+}
+updateCamera();
+
+const inspectPanel = document.getElementById('inspectPanel');
+const satisfiedBtn = document.getElementById('satisfiedBtn');
+const notSatisfiedBtn = document.getElementById('notSatisfiedBtn');
+const showConnectionsBtn = document.getElementById('showConnectionsBtn');
+const showHealthBtn = document.getElementById('showHealthBtn');
+
+let systemSelected = false;
+let connectionsMode = false;
+let healthMode = false;
+
+// UI Logic
+showConnectionsBtn.addEventListener('click', () => {
+  connectionsMode = !connectionsMode;
+  showConnectionsBtn.classList.toggle('active', connectionsMode);
+  showConnectionsBtn.textContent = connectionsMode ? 'Hide Energy' : 'Show Energy';
+  showHealthBtn.style.display = connectionsMode ? 'none' : 'block';
+});
+
+showHealthBtn.addEventListener('click', () => {
+  healthMode = !healthMode;
+  showHealthBtn.classList.toggle('active', healthMode);
+  showHealthBtn.textContent = healthMode ? 'Hide Health' : 'Show Health';
+  showConnectionsBtn.style.display = healthMode ? 'none' : 'block';
+});
+
+// ===== STARS (Depth Colored) =====
+const starsGeom = new THREE.BufferGeometry();
+const starCount = 4000;
+const starPositions = new Float32Array(starCount * 3);
+const starColors = new Float32Array(starCount * 3);
+
+const minRadius = 35;
+const maxRadius = 85;
+
+for (let i = 0; i < starCount; i++) {
+  const radius = minRadius + Math.random() * (maxRadius - minRadius);
+  const theta = Math.random() * Math.PI * 2;
+  const phi = Math.acos(2 * Math.random() - 1);
+  
+  starPositions[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
+  starPositions[i * 3 + 1] = radius * Math.cos(phi);
+  starPositions[i * 3 + 2] = radius * Math.sin(phi) * Math.sin(theta);
+
+  const depthStr = 1.0 - ((radius - minRadius) / (maxRadius - minRadius));
+  const intensity = 0.15 + 0.85 * Math.pow(depthStr, 2.5);
+
+  starColors[i * 3] = 0.85 * intensity + 0.15 * depthStr;
+  starColors[i * 3 + 1] = 0.90 * intensity + 0.10 * depthStr;
+  starColors[i * 3 + 2] = 1.00 * intensity;
+}
+starsGeom.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+starsGeom.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
+
+const stars = new THREE.Points(
+  starsGeom,
+  new THREE.PointsMaterial({
+    size: 0.22,
+    vertexColors: true,
+    transparent: true,
+    opacity: 1.0,
+    sizeAttenuation: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false
+  })
+);
+scene.add(stars);
+
+// ===== MILKY WAY =====
+const milkyWayGroup = new THREE.Group();
+
+const mwSphereGeo = new THREE.SphereGeometry(300, 64, 64);
+const mwSphereMat = new THREE.ShaderMaterial({
+  vertexShader: `
+    varying vec3 vPos;
+    void main() {
+      vPos = position;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    varying vec3 vPos;
+    float hash(vec3 p) {
+      p = fract(p * 0.3183099 + .1); p *= 17.0;
+      return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+    }
+    float noise(vec3 x) {
+      vec3 i = floor(x); vec3 f = fract(x); f = f * f * (3.0 - 2.0 * f);
+      return mix(mix(mix(hash(i+vec3(0,0,0)), hash(i+vec3(1,0,0)), f.x), mix(hash(i+vec3(0,1,0)), hash(i+vec3(1,1,0)), f.x), f.y),
+                 mix(mix(hash(i+vec3(0,0,1)), hash(i+vec3(1,0,1)), f.x), mix(hash(i+vec3(0,1,1)), hash(i+vec3(1,1,1)), f.x), f.y), f.z);
+    }
+    float fbm(vec3 p) {
+      float f = 0.0; float amp = 0.5;
+      for(int i=0; i<4; i++){ f += amp * noise(p); p *= 2.0; amp *= 0.5; }
+      return f;
+    }
+    void main() {
+      vec3 nPos = normalize(vPos);
+      float lat = asin(nPos.y); float lon = atan(nPos.z, nPos.x);
+      float isCore = exp(-pow(lon, 2.0) * 0.5); 
+      float thickness = 4.0 - 1.5 * isCore;
+      float band = exp(-pow(abs(lat) * thickness, 2.0));
+      float n = fbm(nPos * 15.0);
+      float dust = fbm(nPos * 30.0 + vec3(10.0));
+      float rift = smoothstep(0.3, 0.7, dust);
+      band *= (0.4 + 0.6 * n) * (1.0 - rift * 0.5 * exp(-abs(lat)*10.0));
+      vec3 coreColor = vec3(1.0, 0.8, 0.6); vec3 edgeColor = vec3(0.08, 0.15, 0.35);
+      vec3 color = mix(edgeColor, coreColor, isCore * band);
+      gl_FragColor = vec4(color * band * 0.9, band * 0.6);
+    }
+  `,
+  transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.BackSide
+});
+milkyWayGroup.add(new THREE.Mesh(mwSphereGeo, mwSphereMat));
+
+const mwPointsGeo = new THREE.BufferGeometry();
+const mwPointCount = 40000;
+const mwPos = new Float32Array(mwPointCount * 3);
+const mwColors = new Float32Array(mwPointCount * 3);
+const mwRadius = 250;
+
+for (let i = 0; i < mwPointCount; i++) {
+  let l = Math.random() * Math.PI * 2;
+  if (Math.random() > 0.6) l = (Math.random() - 0.5) * 1.5; 
+  const isCore = Math.exp(-Math.pow(l, 2.0) * 0.5);
+  const spread = 0.12 + 0.1 * isCore;
+  const b = (Math.random() + Math.random() + Math.random() - 1.5) * spread;
+
+  mwPos[i*3] = mwRadius * Math.cos(b) * Math.cos(l);
+  mwPos[i*3+1] = mwRadius * Math.sin(b);
+  mwPos[i*3+2] = mwRadius * Math.cos(b) * Math.sin(l);
+
+  const intensity = 0.3 + Math.random() * 0.7;
+  if (isCore > 0.5 && Math.random() > 0.3) {
+    mwColors[i*3] = 1.0 * intensity; mwColors[i*3+1] = 0.85 * intensity; mwColors[i*3+2] = 0.7 * intensity;
+  } else {
+    mwColors[i*3] = 0.6 * intensity; mwColors[i*3+1] = 0.8 * intensity; mwColors[i*3+2] = 1.0 * intensity;
+  }
+}
+mwPointsGeo.setAttribute('position', new THREE.BufferAttribute(mwPos, 3));
+mwPointsGeo.setAttribute('color', new THREE.BufferAttribute(mwColors, 3));
+
+const mwPointsMat = new THREE.PointsMaterial({
+  size: 0.25, vertexColors: true, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false
+});
+milkyWayGroup.add(new THREE.Points(mwPointsGeo, mwPointsMat));
+
+const raNGP = 192.8595 * Math.PI / 180; const decNGP = 27.1283 * Math.PI / 180;
+const yAxisVec = new THREE.Vector3(Math.cos(decNGP) * Math.cos(raNGP), Math.sin(decNGP), Math.cos(decNGP) * Math.sin(raNGP)).normalize();
+const raGC = 266.4051 * Math.PI / 180; const decGC = -28.9362 * Math.PI / 180;
+const xAxisVec = new THREE.Vector3(Math.cos(decGC) * Math.cos(raGC), Math.sin(decGC), Math.cos(decGC) * Math.sin(raGC)).normalize();
+const zAxisVec = new THREE.Vector3().crossVectors(xAxisVec, yAxisVec).normalize();
+xAxisVec.crossVectors(yAxisVec, zAxisVec).normalize();
+const basisMat = new THREE.Matrix4().makeBasis(xAxisVec, yAxisVec, zAxisVec);
+milkyWayGroup.applyMatrix4(basisMat);
+
+scene.add(milkyWayGroup);
+
+// ===== LIGHTING & SUN =====
+const sun = new THREE.DirectionalLight(0xffffff, 1.35); 
+sun.position.set(8, 2.5, 0);
+scene.add(sun);
+scene.add(new THREE.AmbientLight(0xffffff, 0.18));
+
+const sunGroup = new THREE.Group();
+const sunCore = new THREE.Mesh(new THREE.SphereGeometry(0.115, 40, 40), new THREE.MeshBasicMaterial({ color: 0xfff8de }));
+sunGroup.add(sunCore);
+
+const size = 256;
+const canvasGlow = document.createElement('canvas');
+canvasGlow.width = size; canvasGlow.height = size;
+const ctx = canvasGlow.getContext('2d');
+const gradient = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
+gradient.addColorStop(0, 'rgba(255,255,235,1)');
+gradient.addColorStop(0.16, 'rgba(255,245,200,0.95)');
+gradient.addColorStop(0.34, 'rgba(255,228,120,0.60)');
+gradient.addColorStop(0.62, 'rgba(255,216,90,0.18)');
+gradient.addColorStop(1, 'rgba(255,210,70,0)');
+ctx.fillStyle = gradient; ctx.fillRect(0,0,size,size);
+
+const glowTexture = new THREE.CanvasTexture(canvasGlow);
+const sunGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+sunGlow.scale.set(1.28, 1.28, 1);
+sunGroup.add(sunGlow);
+
+function makeRay(length, thickness, color, opacity){
+  return new THREE.Mesh(
+    new THREE.PlaneGeometry(length, thickness),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false })
+  );
+}
+
+const raysGroup = new THREE.Group();
+const rayAngles = [0, Math.PI/5, -Math.PI/5, Math.PI*2/5, -Math.PI*2/5];
+rayAngles.forEach((angle, i) => {
+  const ray = makeRay(i === 0 ? 0.48 : 0.34, i === 0 ? 0.010 : 0.007, 0xffffff, i === 0 ? 0.95 : 0.8);
+  ray.rotation.z = angle; raysGroup.add(ray);
+});
+sunGroup.add(raysGroup);
+sunGroup.position.copy(sun.position.clone().normalize().multiplyScalar(9.5));
+scene.add(sunGroup);
+
+// ===== MOON =====
+const moonOrbitGroup = new THREE.Group();
+scene.add(moonOrbitGroup);
+let moon = null;
+const moonDistance = 1.72;
+
+function getCurrentMoonAngle() {
+  const now = new Date();
+  const synodicMonthDays = 29.530588853;
+  const referenceNewMoon = Date.UTC(2000, 0, 6, 18, 14, 0);
+  const phase = (((now.getTime() - referenceNewMoon) / 86400000) % synodicMonthDays + synodicMonthDays) % synodicMonthDays / synodicMonthDays;
+  return phase * Math.PI * 2;
+}
+const moonAngle = getCurrentMoonAngle();
+
+function orientMoonTowardEarth(moonMesh) {
+  if (!moonMesh) return;
+  moonMesh.lookAt(0, 0, 0);
+  moonMesh.rotateY(Math.PI);
+}
+
+const loader = new THREE.TextureLoader();
+const moonTexture = loader.load('https://threejs.org/examples/textures/planets/moon_1024.jpg');
+moon = new THREE.Mesh(new THREE.SphereGeometry(0.072, 48, 48), new THREE.MeshPhongMaterial({ map: moonTexture, shininess: 2 }));
+moonOrbitGroup.add(moon);
+moon.position.set(Math.cos(moonAngle) * moonDistance, 0.10 * Math.sin(moonAngle * 0.7), Math.sin(moonAngle) * moonDistance);
+orientMoonTowardEarth(moon);
+
+// ===== EARTH =====
+const dayMap = loader.load('https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg');
+const nightMap = loader.load('https://unpkg.com/three-globe/example/img/earth-night.jpg');
+const normalMap = loader.load('https://threejs.org/examples/textures/planets/earth_normal_2048.jpg');
+const specMap = loader.load('https://threejs.org/examples/textures/planets/earth_specular_2048.jpg');
+
+const earthGroup = new THREE.Group();
+scene.add(earthGroup);
+
+const earthMaterial = new THREE.MeshPhongMaterial({
+  map: dayMap, 
+  normalMap: normalMap, 
+  normalScale: new THREE.Vector2(0.85, 0.85), 
+  specularMap: specMap,
+  shininess: 12, 
+  specular: new THREE.Color(0x111111), 
+  color: new THREE.Color(0xffffff), 
+  emissive: new THREE.Color(0x000000)
+});
+const earth = new THREE.Mesh(new THREE.SphereGeometry(1, 128, 128), earthMaterial);
+earthGroup.add(earth);
+
+// ===== GLOBE.GL TRUE DAY/NIGHT CROSSFADE =====
+const nightMaterial = new THREE.ShaderMaterial({
+  uniforms: { 
+    nightMap: { value: nightMap }, 
+    lightDir: { value: new THREE.Vector3(1, 0, 0) },
+    uMode: { value: 0.0 }
+  },
+  vertexShader: `
+    varying vec2 vUv; varying vec3 vNormalW;
+    void main() { 
+      vUv = uv; 
+      vNormalW = normalize(mat3(modelMatrix) * normal); 
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); 
+    }
+  `,
+  fragmentShader: `
+    uniform sampler2D nightMap; 
+    uniform vec3 lightDir; 
+    uniform float uMode;
+    varying vec2 vUv; 
+    varying vec3 vNormalW;
+    
+    void main() {
+      float lDot = dot(normalize(vNormalW), normalize(lightDir));
+      float nightAlpha = smoothstep(0.2, -0.2, lDot);
+      float alpha = mix(nightAlpha, 1.0, uMode);
+      vec3 nightColor = texture2D(nightMap, vUv).rgb;
+      gl_FragColor = vec4(nightColor, alpha);
+    }
+  `,
+  transparent: true, 
+  blending: THREE.NormalBlending, 
+  depthWrite: false
+});
+const nightSphere = new THREE.Mesh(new THREE.SphereGeometry(1.0015, 128, 128), nightMaterial);
+earthGroup.add(nightSphere);
+
+// ===== BINARY HEALTH HEATMAP (DATA-DRIVEN RED/GREEN) =====
+const heatmapCanvas = document.createElement('canvas');
+heatmapCanvas.width = 4096;
+heatmapCanvas.height = 2048;
+const hctx = heatmapCanvas.getContext('2d');
+const heatmapTexture = new THREE.CanvasTexture(heatmapCanvas);
+heatmapTexture.colorSpace = THREE.SRGBColorSpace;
+
+fetch('https://raw.githubusercontent.com/vasturiano/globe.gl/master/example/datasets/world_population.csv')
+  .then(res => res.text())
+  .then(csv => {
+    const lines = csv.split('\n').slice(1);
+    const data = [];
+    
+    // Parse the CSV
+    for (let i = 0; i < lines.length; i++) {
+      if (!lines[i].trim()) continue;
+      const parts = lines[i].split(',');
+      data.push({
+        lat: parseFloat(parts[0]),
+        lng: parseFloat(parts[1]),
+        pop: parseFloat(parts[2])
+      });
+    }
+    
+    if (data.length === 0) {
+      console.warn("Dataset empty or failed to parse.");
+      return;
+    }
+
+    // Sort data so the highest density (Reds) render on top of the Greens
+    data.sort((a, b) => a.pop - b.pop);
+    
+    // Dynamically calculate the threshold. We mark the top 8% of populated areas as "Bad/Red"
+    const threshold = data[Math.floor(data.length * 0.92)].pop; 
+
+    hctx.clearRect(0, 0, heatmapCanvas.width, heatmapCanvas.height);
+    hctx.globalCompositeOperation = 'screen';
+
+    data.forEach(d => {
+      // Equirectangular projection mapping to 2D Canvas X/Y
+      const x = ((d.lng + 180) / 360) * heatmapCanvas.width;
+      const y = ((90 - d.lat) / 180) * heatmapCanvas.height;
+      
+      const isBad = d.pop >= threshold;
+      const radius = isBad ? 16 : 8; 
+      
+      const grad = hctx.createRadialGradient(x, y, 0, x, y, radius);
+      
+      // Binary assignment: Red for high density, Green for lower density
+      if (isBad) {
+        grad.addColorStop(0, 'rgba(239, 68, 68, 0.95)'); // Solid Red
+        grad.addColorStop(1, 'rgba(239, 68, 68, 0)');
+      } else {
+        grad.addColorStop(0, 'rgba(34, 197, 94, 0.60)'); // Glowing Green
+        grad.addColorStop(1, 'rgba(34, 197, 94, 0)');
+      }
+      
+      hctx.fillStyle = grad;
+      hctx.beginPath();
+      hctx.arc(x, y, radius, 0, Math.PI * 2);
+      hctx.fill();
+    });
+    
+    heatmapTexture.needsUpdate = true;
+  })
+  .catch(err => console.error("Error loading heatmap data:", err));
+
+const healthMaterial = new THREE.ShaderMaterial({
+  uniforms: {
+    uHealthFade: { value: 0.0 },
+    tHeatmap: { value: heatmapTexture }
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    uniform float uHealthFade;
+    uniform sampler2D tHeatmap;
+    varying vec2 vUv;
+    void main() {
+      // Sample the painted canvas map
+      vec4 color = texture2D(tHeatmap, vUv);
+      gl_FragColor = vec4(color.rgb, color.a * uHealthFade * 0.90);
+    }
+  `,
+  transparent: true,
+  blending: THREE.AdditiveBlending, // Use Additive blending so it looks like hologram data
+  depthWrite: false,
+  side: THREE.FrontSide
+});
+
+// Pushed to 1.035 to fully clear the atmosphere sphere (1.032)
+const healthSphere = new THREE.Mesh(new THREE.SphereGeometry(1.035, 128, 128), healthMaterial);
+healthSphere.renderOrder = 10; 
+earthGroup.add(healthSphere);
+
+// ===== SUPERCHARGED ATMOSPHERE GLOW =====
+const atmosphereMaterial = new THREE.ShaderMaterial({
+  uniforms: { lightDir: { value: new THREE.Vector3(1, 0, 0) } },
+  vertexShader: `
+    varying vec3 vNormalView; varying vec3 vNormalWorld;
+    void main() { vNormalView = normalize(normalMatrix * normal); vNormalWorld = normalize(mat3(modelMatrix) * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
+  `,
+  fragmentShader: `
+    uniform vec3 lightDir; varying vec3 vNormalView; varying vec3 vNormalWorld;
+    void main() {
+      float fresnel = pow(1.0 - max(0.0, dot(vNormalView, vec3(0.0, 0.0, 1.0))), 2.8);
+      float lDot = dot(normalize(vNormalWorld), normalize(lightDir));
+      vec3 dayColor = vec3(0.3, 0.6, 1.0);
+      vec3 sunsetColor = vec3(1.5, 0.5, 0.1); 
+      vec3 color = mix(sunsetColor, dayColor, smoothstep(-0.15, 0.4, lDot));
+      float alpha = fresnel * smoothstep(-0.05, 0.2, lDot) * 1.2;
+      gl_FragColor = vec4(color, alpha);
+    }
+  `,
+  transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.FrontSide
+});
+const atmosphereSphere = new THREE.Mesh(new THREE.SphereGeometry(1.032, 128, 128), atmosphereMaterial);
+earthGroup.add(atmosphereSphere);
+
+// ===== POLAR AURORAS =====
+const auroraMaterial = new THREE.ShaderMaterial({
+  uniforms: { time: { value: 0 }, lightDir: { value: new THREE.Vector3(1, 0, 0) }, uMode: { value: 0.0 } },
+  vertexShader: `
+    varying vec3 vPos; varying vec3 vNormalWorld;
+    void main() { vPos = position; vNormalWorld = normalize(mat3(modelMatrix) * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
+  `,
+  fragmentShader: `
+    uniform float time; uniform vec3 lightDir; uniform float uMode; varying vec3 vPos; varying vec3 vNormalWorld;
+    float hash(vec3 p) { p = fract(p * 0.3183099 + .1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+    float noise(vec3 x) {
+      vec3 i = floor(x); vec3 f = fract(x); f = f * f * (3.0 - 2.0 * f);
+      return mix(mix(mix(hash(i+vec3(0,0,0)), hash(i+vec3(1,0,0)), f.x), mix(hash(i+vec3(0,1,0)), hash(i+vec3(1,1,0)), f.x), f.y),
+                 mix(mix(hash(i+vec3(0,0,1)), hash(i+vec3(1,0,1)), f.x), mix(hash(i+vec3(0,1,1)), hash(i+vec3(1,1,1)), f.x), f.y), f.z);
+    }
+    float fbm(vec3 p) { float f = 0.0; float amp = 0.5; for(int i=0; i<4; i++){ f += amp * noise(p); p *= 2.0; amp *= 0.5; } return f; }
+    void main() {
+      vec3 nPos = normalize(vPos); float lat = abs(nPos.y);
+      float band = smoothstep(0.78, 0.88, lat) * smoothstep(0.98, 0.90, lat);
+      if (band <= 0.0) discard;
+      vec3 p1 = vec3(nPos.x * 20.0, nPos.y * 5.0, nPos.z * 20.0); p1.x += time * 0.12; float n1 = fbm(p1);
+      vec3 p2 = vec3(nPos.x * 40.0, nPos.y * 10.0, nPos.z * 40.0); p2.z -= time * 0.22; float n2 = fbm(p2);
+      float cur = smoothstep(0.4, 0.75, n1 * n2 + n2 * 0.45);
+      float lDot = dot(normalize(vNormalWorld), normalize(lightDir));
+      float nightMask = mix(smoothstep(0.1, -0.2, lDot), 1.0, uMode);
+      vec3 color = mix(vec3(0.1, 1.0, 0.3), vec3(1.0, 0.2, 0.8), n1 * 1.5);
+      gl_FragColor = vec4(color, band * cur * nightMask * 0.95);
+    }
+  `,
+  transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.FrontSide
+});
+const auroraSphere = new THREE.Mesh(new THREE.SphereGeometry(1.02, 128, 128), auroraMaterial);
+earthGroup.add(auroraSphere);
+
+// ===== SYSTEM DOME =====
+const systemGroup = new THREE.Group();
+const dome = new THREE.Mesh(new THREE.SphereGeometry(0.0225, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x6fbaff }));
+systemGroup.add(dome);
+const domeGlow = new THREE.Mesh(new THREE.SphereGeometry(0.0275, 20, 20), new THREE.MeshBasicMaterial({ color: 0x4da6ff, transparent: true, opacity: 0.06 }));
+systemGroup.add(domeGlow);
+const systemRing = new THREE.Mesh(new THREE.RingGeometry(0.025, 0.036, 64), new THREE.MeshBasicMaterial({ color: 0x4da6ff, transparent: true, opacity: 0.95, side: THREE.DoubleSide }));
+systemRing.rotation.x = -Math.PI / 2;
+systemGroup.add(systemRing);
+scene.add(systemGroup);
+
+function createSystem(){
+  const g = new THREE.Group();
+  g.add(new THREE.Mesh(new THREE.SphereGeometry(0.0225, 32, 16, 0, Math.PI*2, 0, Math.PI/2), new THREE.MeshBasicMaterial({color:0x6fbaff})));
+  g.add(new THREE.Mesh(new THREE.SphereGeometry(0.0275, 20, 20), new THREE.MeshBasicMaterial({color:0x4da6ff, transparent:true, opacity:0.06})));
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.025,0.036,64), new THREE.MeshBasicMaterial({color:0x4da6ff, transparent:true, opacity:0.95, side:THREE.DoubleSide}));
+  ring.rotation.x = -Math.PI/2; g.add(ring);
+  return {g, dome: g.children[0], glow: g.children[1], ring};
+}
+
+const systemsData = [
+  {lat:45.4642, lon:9.1900}, // Milan
+  {lat:35.2271, lon:-80.8431}, // Charlotte
+  {lat:45.5152, lon:-122.6784}, // Portland
+  {lat:18.5204, lon:73.8567}, // Pune
+  {lat:30.7333, lon:76.7794}, // Chandigarh
+  {lat:28.6139, lon:77.2090}, // Delhi
+  {lat:45.6770, lon:-111.0429}, // Bozeman
+  {lat:48.4284, lon:-123.3656}, // Victoria BC
+  {lat:53.4808, lon:-2.2426}, // Manchester, UK
+  {lat:41.8781, lon:-87.6298}, // Chicago, USA
+  {lat:-33.8688, lon:151.2093}, // Sydney, Australia
+  {lat:12.9716, lon:77.5946}, // Bangalore, India
+  {lat:13.0827, lon:80.2707}, // Chennai, India
+  {lat:1.3521, lon:103.8198}, // Singapore
+  {lat:31.6340, lon:74.8723}, // Amritsar, India
+  {lat:22.7196, lon:75.8577}  // Indore, India
+];
+const extraSystems = systemsData.map(d=>{ const s = createSystem(); scene.add(s.g); s.base = latLonToVec(d.lat, d.lon, 1.001); return s; });
+
+// ===== SYNCHRONIZED, BI-DIRECTIONAL ENERGY ARCS =====
+let globalMaxArcLength = 0;
+
+const arcShaderSource = {
+  uniforms: {
+    time: { value: 0 },
+    colorGoa: { value: new THREE.Color(0xffd700) }, // Gold
+    colorSys: { value: new THREE.Color(0x4da6ff) }, // Cyan/Blue
+    isCore: { value: 1.0 },
+    arcLength: { value: 1.0 }, 
+    maxArcLength: { value: 1.0 } 
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    uniform float time;
+    uniform vec3 colorGoa;
+    uniform vec3 colorSys;
+    uniform float isCore;
+    uniform float arcLength;
+    uniform float maxArcLength;
+    varying vec2 vUv;
+
+    void main() {
+      vec3 baseColor = mix(colorGoa, colorSys, vUv.x);
+      float V = 0.15; 
+      float D_leg = maxArcLength + 0.5; 
+      float D_cycle = D_leg * 2.0; 
+      float d_total = time * V;
+      float d_mod = mod(d_total, D_cycle);
+      float isRev = step(D_leg, d_mod);
+      float head_pos = d_mod - isRev * D_leg;
+      float x_fwd = (1.0 - vUv.x) * arcLength; 
+      float x_rev = vUv.x * arcLength;         
+      float x_pixel = mix(x_fwd, x_rev, isRev);
+      float dBehind = head_pos - x_pixel;
+      float validMask = step(0.0, dBehind);
+      float L_tail = 0.45;
+      float L_head = 0.035;
+      float trail = smoothstep(L_tail, 0.0, dBehind) * validMask;
+      float head = smoothstep(L_head, 0.0, dBehind) * validMask;
+      float baseAlpha = isCore > 0.5 ? 0.25 : 0.06;
+      float pulseAlpha = trail * 0.6 + head * 1.0;
+      if (isCore < 0.5) pulseAlpha *= 0.5;
+      vec3 finalColor = baseColor + (baseColor * pulseAlpha * 2.0); 
+      float outAlpha = (baseAlpha + pulseAlpha) * smoothstep(0.0, 0.05, vUv.x) * smoothstep(1.0, 0.95, vUv.x);
+      gl_FragColor = vec4(finalColor, outAlpha);
+    }
+  `
+};
+
+function createArcLine() {
+  const placeholderCurve = new THREE.QuadraticBezierCurve3(
+    new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0.2, 0), new THREE.Vector3(0.2, 0, 0)
+  );
+
+  const matCore = new THREE.ShaderMaterial({
+    uniforms: THREE.UniformsUtils.clone(arcShaderSource.uniforms),
+    vertexShader: arcShaderSource.vertexShader,
+    fragmentShader: arcShaderSource.fragmentShader,
+    transparent: true, blending: THREE.AdditiveBlending, depthWrite: false
+  });
+  matCore.uniforms.isCore.value = 1.0;
+
+  const matGlow = new THREE.ShaderMaterial({
+    uniforms: THREE.UniformsUtils.clone(arcShaderSource.uniforms),
+    vertexShader: arcShaderSource.vertexShader,
+    fragmentShader: arcShaderSource.fragmentShader,
+    transparent: true, blending: THREE.AdditiveBlending, depthWrite: false
+  });
+  matGlow.uniforms.isCore.value = 0.0;
+
+  const tubeCore = new THREE.Mesh(new THREE.TubeGeometry(placeholderCurve, 64, 0.0015, 8, false), matCore);
+  const tubeGlow = new THREE.Mesh(new THREE.TubeGeometry(placeholderCurve, 64, 0.0045, 8, false), matGlow);
+  
+  tubeCore.visible = false;
+  tubeGlow.visible = false;
+  
+  scene.add(tubeCore);
+  scene.add(tubeGlow);
+
+  return { tubeCore, tubeGlow };
+}
+
+const goaConnections = extraSystems.map((sys) => {
+  const arc = createArcLine();
+  return { sys, arc };
+});
+
+function updateArcPositions(startVec, endVec, arcObj) {
+  const start = startVec.clone().normalize().multiplyScalar(1.03);
+  const end = endVec.clone().normalize().multiplyScalar(1.03);
+  const mid = start.clone().add(end).multiplyScalar(0.5).normalize();
+  
+  const distance = start.distanceTo(end);
+  const lift = Math.min(1.4, 0.35 + distance * 0.6);
+  const control = mid.multiplyScalar(1.0 + lift);
+
+  const curve = new THREE.QuadraticBezierCurve3(start, control, end);
+  const trueArcLength = curve.getLength();
+  
+  if (trueArcLength > globalMaxArcLength) {
+      globalMaxArcLength = trueArcLength;
+  }
+
+  arcObj.tubeCore.material.uniforms.arcLength.value = trueArcLength;
+  arcObj.tubeGlow.material.uniforms.arcLength.value = trueArcLength;
+  arcObj.tubeCore.material.uniforms.maxArcLength.value = globalMaxArcLength;
+  arcObj.tubeGlow.material.uniforms.maxArcLength.value = globalMaxArcLength;
+
+  if (arcObj.tubeCore.geometry) arcObj.tubeCore.geometry.dispose();
+  if (arcObj.tubeGlow.geometry) arcObj.tubeGlow.geometry.dispose();
+  
+  arcObj.tubeCore.geometry = new THREE.TubeGeometry(curve, 64, 0.0015, 8, false);
+  arcObj.tubeGlow.geometry = new THREE.TubeGeometry(curve, 64, 0.0045, 8, false);
+}
+
+// ===== UI & STATE =====
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+
+function projectPointer(event) {
+  const rect = canvas.getBoundingClientRect();
+  pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+}
+
+const dashboardState = { mode: 'default', allMet: true };
+
+function updateDashboardSatisfied(value) {
+  dashboardState.mode = 'needs';
+  dashboardState.allMet = value;
+}
+
+satisfiedBtn.addEventListener('click', () => updateDashboardSatisfied(true));
+notSatisfiedBtn.addEventListener('click', () => updateDashboardSatisfied(false));
+
+// ===== LOCATION =====
+const lat = 15.5588;
+const lon = 73.7700;
+
+function latLonToVec(lat, lon, r) {
+  const phi = (90 - lat) * Math.PI / 180;
+  const theta = (lon + 180) * Math.PI / 180;
+  return new THREE.Vector3(
+    -r * Math.sin(phi) * Math.cos(theta), r * Math.cos(phi), r * Math.sin(phi) * Math.sin(theta)
+  );
+}
+const base = latLonToVec(lat, lon, 1.001);
+const domeHeight = 0.02;
+
+function getDashboardColors() {
+  const blueRing = 0x4da6ff, blueDome = 0x6fbaff, greenDome = 0x16a34a, redDome = 0xdc2626;
+  if (dashboardState.mode === 'needs' || dashboardState.mode === 'goals') {
+    return { ring: blueRing, dome: dashboardState.allMet ? greenDome : redDome, glow: dashboardState.allMet ? 0x16a34a : 0xdc2626 };
+  }
+  return { ring: blueRing, dome: blueDome, glow: blueRing };
+}
+
+// ===== CURRENT EARTH ROTATION FROM REAL UTC =====
+function currentUtcFraction() {
+  const now = new Date();
+  return (now.getUTCHours() + now.getUTCMinutes() / 60 + now.getUTCSeconds() / 3600) / 24;
+}
+
+function updateEarthSpin() {
+  earthGroup.rotation.y = (currentUtcFraction() * Math.PI * 2) - Math.PI;
+}
+
+// ===== INTERACTION =====
+let dragging = false, lastX = 0, lastY = 0, pointerMoved = false;
+
+canvas.addEventListener('pointerdown', (e) => { dragging = true; pointerMoved = false; lastX = e.clientX; lastY = e.clientY; });
+canvas.addEventListener('pointermove', (e) => {
+  if (!dragging) return;
+  const dx = e.clientX - lastX, dy = e.clientY - lastY;
+  if (Math.abs(dx) > 2 || Math.abs(dy) > 2) pointerMoved = true;
+  orbit.theta -= dx * 0.005; orbit.phi += dy * 0.004; orbit.phi = Math.max(-1.25, Math.min(1.25, orbit.phi));
+  lastX = e.clientX; lastY = e.clientY;
+  updateCamera();
+});
+canvas.addEventListener('pointerup', (e) => {
+  if (!pointerMoved) {
+    projectPointer(e); raycaster.setFromCamera(pointer, camera);
+    if (raycaster.intersectObject(dome, false).length) {
+      systemSelected = true; inspectPanel.classList.add('visible');
+    } else if (!inspectPanel.contains(e.target)) {
+      systemSelected = false; inspectPanel.classList.remove('visible');
+    }
+  }
+  dragging = false;
+});
+canvas.addEventListener('pointerleave', () => dragging = false);
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault(); orbit.radius += e.deltaY * 0.001; orbit.radius = Math.max(1.6, Math.min(5, orbit.radius)); updateCamera();
+}, { passive: false });
+
+window.addEventListener('resize', () => {
+  renderer.setSize(window.innerWidth, window.innerHeight); camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix(); updateCamera();
+});
+
+// ===== ANIMATION =====
+let t = 0;
+function animate() {
+  requestAnimationFrame(animate);
+  updateEarthSpin();
+
+  nightMaterial.uniforms.lightDir.value.copy(sun.position).normalize();
+  atmosphereMaterial.uniforms.lightDir.value.copy(sun.position).normalize();
+  auroraMaterial.uniforms.lightDir.value.copy(sun.position).normalize();
+  auroraMaterial.uniforms.time.value = t;
+
+  const isConn = connectionsMode;
+  
+  const targetMode = (isConn || healthMode) ? 1.0 : 0.0;
+  nightMaterial.uniforms.uMode.value += (targetMode - nightMaterial.uniforms.uMode.value) * 0.1;
+  auroraMaterial.uniforms.uMode.value = nightMaterial.uniforms.uMode.value;
+
+  // Fade Heatmap In/Out
+  const targetHealthFade = healthMode ? 1.0 : 0.0;
+  healthMaterial.uniforms.uHealthFade.value += (targetHealthFade - healthMaterial.uniforms.uHealthFade.value) * 0.1;
+
+  const rotatedSurface = base.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), earthGroup.rotation.y);
+  const outward = rotatedSurface.clone().normalize();
+  const domePos = rotatedSurface.clone().add(outward.clone().multiplyScalar(domeHeight));
+  systemGroup.position.copy(domePos);
+  systemGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), outward);
+
+  extraSystems.forEach(s=>{
+    const surf = s.base.clone().applyAxisAngle(new THREE.Vector3(0,1,0), earthGroup.rotation.y);
+    const out = surf.clone().normalize();
+    const pos = surf.clone().add(out.clone().multiplyScalar(domeHeight));
+    s.g.position.copy(pos);
+    s.g.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), out);
+    s.dome.scale.setScalar(1 + Math.sin(t)*0.02);
+    s.glow.scale.setScalar(1 + Math.sin(t)*0.02);
+  });
+
+  goaConnections.forEach(({ sys, arc }) => {
+    const sysSurface = sys.base.clone().applyAxisAngle(new THREE.Vector3(0,1,0), earthGroup.rotation.y);
+    updateArcPositions(rotatedSurface, sysSurface, arc);
+    
+    arc.tubeCore.visible = isConn;
+    arc.tubeGlow.visible = isConn;
+
+    if (isConn) {
+        arc.tubeCore.material.uniforms.time.value = t;
+        arc.tubeGlow.material.uniforms.time.value = t;
+    }
+  });
+
+  t += 0.04;
+
+  const dashboardColors = getDashboardColors();
+  dome.material.color.setHex(dashboardColors.dome);
+  domeGlow.material.color.setHex(dashboardColors.glow);
+  systemRing.material.color.setHex(dashboardColors.ring);
+  dome.scale.setScalar(1 + Math.sin(t) * 0.02);
+  domeGlow.scale.setScalar(1 + Math.sin(t) * 0.02);
+
+  const sunPulse = 1 + Math.sin(t * 0.55) * 0.035;
+  sunGlow.scale.set(1.28 * sunPulse, 1.28 * sunPulse, 1);
+  raysGroup.rotation.z += 0.0008;
+
+  if (moon) orientMoonTowardEarth(moon);
+
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>
