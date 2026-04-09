@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Earth Systems Manifest — Live on Internet for a User</title>
+<style>
+:root{
+  --bg0:#020611;
+  --bg1:#071425;
+  --bg2:#0c2240;
+  --panel:rgba(7,16,31,.82);
+  --line:rgba(159,208,255,.16);
+  --text:#ebf5ff;
+  --muted:#9cb2cc;
+  --accent:#76c4ff;
+  --good:#39d98a;
+  --warn:#ffd166;
+  --bad:#ff5b7a;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:
+ radial-gradient(circle at 18% 18%, rgba(66,119,255,.14), transparent 25%),
+ radial-gradient(circle at 84% 12%, rgba(57,255,212,.08), transparent 20%),
+ radial-gradient(circle at 50% 70%, rgba(63,135,255,.07), transparent 30%),
+ linear-gradient(180deg,var(--bg2),var(--bg1) 40%,var(--bg0)); color:var(--text);
+ font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;}
+#app{position:relative;width:100%;height:100%}
+canvas{display:block}
+.panel{
+  position:absolute;z-index:10;border:1px solid var(--line);background:var(--panel);
+  backdrop-filter: blur(12px); border-radius:18px;
+  box-shadow:0 10px 40px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.03);
+}
+#left{top:14px;left:14px;width:380px;max-height:calc(100% - 28px);overflow:auto;padding:14px}
+#right{top:14px;right:14px;width:380px;max-height:calc(100% - 28px);overflow:auto;padding:14px}
+#legend{left:14px;bottom:14px;padding:12px 14px}
+#status{right:14px;bottom:14px;padding:10px 12px;max-width:440px}
+h1{margin:0;font-size:18px;letter-spacing:.02em}
+h2{margin:4px 0 0 0;font-size:12px;color:var(--muted);font-weight:600}
+h3{margin:0 0 8px 0;font-size:13px;color:#dfeeff}
+.section{margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.08)}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.row.single{grid-template-columns:1fr}
+label{display:block;font-size:11px;color:var(--muted);margin:0 0 5px 0}
+select,button{
+  width:100%;border-radius:12px;border:1px solid rgba(255,255,255,.1);
+  background:rgba(255,255,255,.05);color:var(--text);padding:10px 12px;outline:none
+}
+button{
+  cursor:pointer;background:linear-gradient(180deg, rgba(119,196,255,.16), rgba(119,196,255,.09));
+  transition:transform .15s ease, background .15s ease;
+}
+button:hover{transform:translateY(-1px);background:linear-gradient(180deg, rgba(119,196,255,.22), rgba(119,196,255,.12))}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}
+.card{
+  border:1px solid rgba(255,255,255,.08); border-radius:14px; padding:10px;
+  background:rgba(255,255,255,.03)
+}
+.big{font-size:22px;font-weight:700;line-height:1.1}
+.small{font-size:12px;color:var(--muted)}
+.tiny{font-size:11px;color:var(--muted);line-height:1.45}
+.list{display:grid;gap:8px}
+.listItem{
+  border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:10px;
+  background:rgba(255,255,255,.03)
+}
+.bad{color:var(--bad)} .good{color:var(--good)} .warn{color:var(--warn)}
+.pill{display:inline-block;margin:5px 6px 0 0;padding:4px 8px;border-radius:999px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.03);font-size:11px;color:var(--muted)}
+.legend-bar{
+  width:260px;height:12px;border-radius:999px;margin-top:8px;border:1px solid rgba(255,255,255,.12);
+  background:linear-gradient(90deg,#265eff 0%,#00d7ff 30%,#30e58f 56%,#ffe066 78%,#ff4d6d 100%)
+}
+#tooltip{
+  position:absolute;z-index:20;pointer-events:none;padding:8px 10px;border-radius:10px;
+  background:rgba(7,16,31,.95);border:1px solid rgba(255,255,255,.12);color:var(--text);
+  font-size:12px;transform:translate(-50%, calc(-100% - 12px));display:none;white-space:nowrap;
+  box-shadow:0 8px 24px rgba(0,0,0,.35)
+}
+a{color:var(--accent)}
+@media (max-width:1100px){
+  #left{width:340px} #right{width:320px}
+  .stats{grid-template-columns:repeat(2,1fr)}
+}
+
+.panel-toggle{
+  position:absolute;top:10px;z-index:12;border:1px solid var(--line);background:rgba(7,16,31,.94);
+  color:var(--text);width:38px;height:38px;border-radius:12px;display:none;align-items:center;justify-content:center;
+  box-shadow:0 8px 24px rgba(0,0,0,.28);font-size:18px;font-weight:700;cursor:pointer
+}
+#leftToggle{left:10px}
+#rightToggle{right:10px}
+.panel-toggle:hover{background:rgba(18,36,64,.98)}
+@media (max-width:900px){
+  .panel-toggle{display:flex}
+  #left,#right{
+    width:min(88vw,360px);
+    max-height:calc(100% - 90px);
+    top:56px;
+    transition:transform .25s ease, opacity .25s ease;
+  }
+  #left.collapsed{transform:translateX(calc(-100% - 22px));opacity:.55}
+  #right.collapsed{transform:translateX(calc(100% + 22px));opacity:.55}
+  #legend{left:10px;bottom:10px;max-width:calc(100vw - 20px)}
+  #status{left:10px;right:10px;bottom:10px;max-width:none}
+}
+
+</style>
+</head>
+<body>
+<div id="app">
+
+  <button id="leftToggle" class="panel-toggle" aria-label="Toggle left panel" title="Toggle controls">☰</button>
+  <button id="rightToggle" class="panel-toggle" aria-label="Toggle right panel" title="Toggle details">☰</button>
+  <div id="left" class="panel">
+    <h1>Earth Systems Manifest</h1>
+    <h2>Live on internet for a user</h2>
+
+    <div class="stats">
+      <div class="card"><div class="small">Responses</div><div class="big" id="responsesCount">0</div></div>
+      <div class="card"><div class="small">Average</div><div class="big" id="avgScore">0%</div></div>
+      <div class="card"><div class="small">Able</div><div class="big" id="ableCount">0</div></div>
+      <div class="card"><div class="small">Unable</div><div class="big" id="unableCount">0</div></div>
+    </div>
+
+    <div class="section">
+      <h3>View</h3>
+      <div class="row">
+        <div>
+          <label for="metricSelect">Metric</label>
+          <select id="metricSelect">
+            <option value="trust">Trust</option>
+            <option value="satisfied">Satisfaction</option>
+            <option value="task_ability">Daily task ability</option>
+          </select>
+        </div>
+        <div>
+          <label for="systemSelect">System</label>
+          <select id="systemSelect"></select>
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label for="locationSelect">Jump to location</label>
+          <select id="locationSelect"><option value="">Global view</option></select>
+        </div>
+        <div>
+          <label for="motionSelect">Motion</label>
+          <select id="motionSelect">
+            <option value="on">Auto rotate on</option>
+            <option value="off">Auto rotate off</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>What this shows</h3>
+      <div class="tiny">
+        Each hotspot is a reported human dependency pattern at a location. The globe surface blends nearby reports into a heat layer so you can read regional pressure, confidence, satisfaction, and whether people report being healthy enough to perform daily human tasks.
+      </div>
+      <div id="metaPills"></div>
+    </div>
+
+    <div class="section">
+      <h3>Global system ranking</h3>
+      <div class="tiny" id="rankingNote" style="margin-bottom:8px"></div>
+      <div id="rankingList" class="list"></div>
+    </div>
+  </div>
+
+  <div id="right" class="panel">
+    <h1>Selection</h1>
+    <h2>Area, system, and human ability details</h2>
+    <div id="detailsBody" class="tiny">Click a hotspot or area on the globe to inspect the nearest location.</div>
+
+    <div class="section">
+      <h3>What needs attention</h3>
+      <div id="alertsList" class="list"></div>
+    </div>
+
+    <div class="section">
+      <h3>Useful notes</h3>
+      <div class="tiny">
+        Personal names are removed in this public version. To publish live, host this HTML file and the JSON file in the same directory on your server.
+      </div>
+    </div>
+  </div>
+
+  <div id="legend" class="panel">
+    <div class="small">Heat legend</div>
+    <div class="legend-bar"></div>
+    <div class="small" style="display:flex;justify-content:space-between;width:260px;margin-top:6px">
+      <span>low</span><span>medium</span><span>high</span>
+    </div>
+  </div>
+
+  <div id="status" class="panel">
+    <div class="tiny" id="statusText">Loading live dashboard…</div>
+  </div>
+
+  <div id="tooltip"></div>
+</div>
+
+<script src="https://unpkg.com/three@0.154.0/build/three.min.js"></script>
+<script src="https://unpkg.com/topojson-client@3/dist/topojson-client.min.js"></script>
+<script>
+(() => {
+  if (!window.THREE) {
+    document.getElementById('statusText').textContent = 'Three.js did not load. Open while online or verify your server can reach the CDN.';
+    return;
+  }
+
+  const DATA_URL = './earth_manifest_live_data_with_task_ability.json';
+  const EMBEDDED_DATA = {"meta":{"title":"Earth Systems Manifest Live on Internet for a User","updated_at":"2026-03-13T19:25:00Z","description":"Sample public-facing dataset for live deployment. Personal names removed. Includes daily-task ability status.","record_count":100,"daily_task_question":"As a human system are you healthy enough to be able to perform your daily tasks?","daily_task_unable_count":19,"daily_task_able_count":81},"systems":["air","water","food","cloth","home","guard","health","energy","transport","technology","wisdom","academy","plant","animal"],"people":[{"id":1,"location_label":"Beijing, China","lat":40.7104,"lon":116.2181,"air":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Home Filtration"},"water":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"City Utility"},"food":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Local Market"},"cloth":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Family Provider"},"home":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Shelter Network"},"guard":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Family Protection"},"health":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Public Health Service"},"energy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Solar Roof"},"transport":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Walking Network"},"technology":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Telecom Provider"},"wisdom":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Elders"},"academy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Public School"},"plant":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"House Plants"},"animal":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Companion Animals"},"country":"China","can_perform_daily_tasks":false,"daily_task_ability_response":"No, I'm unable to perform basic human tasks."},{"id":2,"location_label":"Vancouver, Canada","lat":49.0335,"lon":-123.5735,"air":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Forest Belt"},"water":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Rain Catchment"},"food":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Farmers Market"},"cloth":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Household Wardrobe"},"home":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Family Home"},"guard":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Neighborhood Watch"},"health":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Health Cooperative"},"energy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Grid Utility"},"transport":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Metro System"},"technology":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Telecom Provider"},"wisdom":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Sacred Texts"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Online Course"},"plant":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Garden"},"animal":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Livestock"},"country":"Canada","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":3,"location_label":"Tokyo, Japan","lat":35.009,"lon":139.196,"air":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Home Filtration"},"water":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Water Cooperative"},"food":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Community Kitchen"},"cloth":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Clothing Cooperative"},"home":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Apartment Network"},"guard":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Community Guard"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Family Doctor"},"energy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Fuel Provider"},"transport":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Bus Network"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Telecom Provider"},"wisdom":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Personal Reflection"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Training Center"},"plant":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Urban Trees"},"animal":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Livestock"},"country":"Japan","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":4,"location_label":"Berlin, Germany","lat":53.3924,"lon":13.2981,"air":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Home Filtration"},"water":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Rain Catchment"},"food":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Local Market"},"cloth":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Textile Market"},"home":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Rental System"},"guard":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Family Protection"},"health":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Clinic Network"},"energy":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Battery Network"},"transport":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Walking Network"},"technology":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Telecom Provider"},"wisdom":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Elders"},"academy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Public School"},"plant":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Forest Ecosystem"},"animal":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Livestock"},"country":"Germany","can_perform_daily_tasks":false,"daily_task_ability_response":"No, I'm unable to perform basic human tasks."},{"id":5,"location_label":"Moscow, Russia","lat":55.8306,"lon":37.6222,"air":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Ventilation Network"},"water":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Village Well"},"food":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Mother"},"cloth":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Clothing Cooperative"},"home":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Housing Cooperative"},"guard":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Neighborhood Watch"},"health":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Clinic Network"},"energy":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Battery Network"},"transport":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Walking Network"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Public Internet"},"wisdom":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Elders"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"University"},"plant":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Forest Ecosystem"},"animal":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Wildlife Ecosystem"},"country":"Russia","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":6,"location_label":"Vancouver, Canada","lat":49.1052,"lon":-122.3165,"air":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Home Filtration"},"water":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Village Well"},"food":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Community Kitchen"},"cloth":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Family Provider"},"home":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Family Home"},"guard":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Family Protection"},"health":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Clinic Network"},"energy":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Fuel Provider"},"transport":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Bicycle"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Mobile Network"},"wisdom":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Personal Reflection"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Training Center"},"plant":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"House Plants"},"animal":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Companion Animals"},"country":"Canada","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":7,"location_label":"Los Angeles, USA","lat":34.7233,"lon":-117.746,"air":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Ventilation Network"},"water":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"River Network"},"food":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Farmers Market"},"cloth":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Local Tailor"},"home":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Apartment Network"},"guard":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Security Cooperative"},"health":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"City Hospital"},"energy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Fuel Provider"},"transport":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Bicycle"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Community Tech Hub"},"wisdom":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Community Knowledge"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Online Course"},"plant":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Garden"},"animal":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Pets"},"country":"USA","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":8,"location_label":"S\u00e3o Paulo, Brazil","lat":-23.6547,"lon":-47.4027,"air":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Local Airshed"},"water":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Rain Catchment"},"food":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Community Kitchen"},"cloth":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Clothing Cooperative"},"home":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Apartment Network"},"guard":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Security Cooperative"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Family Doctor"},"energy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Grid Utility"},"transport":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Metro System"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Public Internet"},"wisdom":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Mentor Circle"},"academy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Online Course"},"plant":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Garden"},"animal":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Wildlife Ecosystem"},"country":"Brazil","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":9,"location_label":"Singapore","lat":1.1828,"lon":103.8857,"air":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"City Atmosphere"},"water":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Water Cooperative"},"food":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Mother"},"cloth":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Local Tailor"},"home":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Housing Cooperative"},"guard":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Neighborhood Watch"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Family Doctor"},"energy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Solar Roof"},"transport":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Bicycle"},"technology":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Public Internet"},"wisdom":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Mentor Circle"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"University"},"plant":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Forest Ecosystem"},"animal":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Companion Animals"},"country":"Singapore","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":10,"location_label":"Jakarta, Indonesia","lat":-5.3483,"lon":106.8712,"air":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Forest Belt"},"water":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Water Cooperative"},"food":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Local Market"},"cloth":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Household Wardrobe"},"home":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Family Home"},"guard":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Neighborhood Watch"},"health":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Health Cooperative"},"energy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Battery Network"},"transport":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Metro System"},"technology":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Community Tech Hub"},"wisdom":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Sacred Texts"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"University"},"plant":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Garden"},"animal":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Wildlife Ecosystem"},"country":"Indonesia","can_perform_daily_tasks":false,"daily_task_ability_response":"No, I'm unable to perform basic human tasks."},{"id":11,"location_label":"Milan, Italy","lat":45.4186,"lon":9.195,"air":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"City Atmosphere"},"water":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"River Network"},"food":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Food Cooperative"},"cloth":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Family Provider"},"home":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Shelter Network"},"guard":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Family Protection"},"health":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Clinic Network"},"energy":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Fuel Provider"},"transport":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Walking Network"},"technology":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Telecom Provider"},"wisdom":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Elders"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"University"},"plant":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Forest Ecosystem"},"animal":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Wildlife Ecosystem"},"country":"Italy","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":12,"location_label":"Jakarta, Indonesia","lat":-7.0174,"lon":105.9795,"air":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Local Airshed"},"water":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"River Network"},"food":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Community Kitchen"},"cloth":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Textile Market"},"home":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Apartment Network"},"guard":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Family Protection"},"health":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Family Doctor"},"energy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Solar Roof"},"transport":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Bicycle"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Telecom Provider"},"wisdom":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Elders"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Public School"},"plant":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Forest Ecosystem"},"animal":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Wildlife Ecosystem"},"country":"Indonesia","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":13,"location_label":"Vancouver, Canada","lat":49.7636,"lon":-122.2328,"air":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Forest Belt"},"water":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"River Network"},"food":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Food Cooperative"},"cloth":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Household Wardrobe"},"home":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Shelter Network"},"guard":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Security Cooperative"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"City Hospital"},"energy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Microgrid"},"transport":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Rail Service"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Laptop"},"wisdom":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Elders"},"academy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Online Course"},"plant":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Garden"},"animal":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Pollinators"},"country":"Canada","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":14,"location_label":"Singapore","lat":1.1221,"lon":103.627,"air":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"City Atmosphere"},"water":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"City Utility"},"food":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Local Market"},"cloth":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Family Provider"},"home":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Rental System"},"guard":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Family Protection"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Public Health Service"},"energy":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Microgrid"},"transport":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Bicycle"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Telecom Provider"},"wisdom":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Sacred Texts"},"academy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Online Course"},"plant":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Crop Fields"},"animal":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Livestock"},"country":"Singapore","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":15,"location_label":"Nairobi, Kenya","lat":-2.0511,"lon":36.8183,"air":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Forest Belt"},"water":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Village Well"},"food":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Mother"},"cloth":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Family Provider"},"home":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Rental System"},"guard":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Police Service"},"health":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"City Hospital"},"energy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Battery Network"},"transport":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Bus Network"},"technology":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Community Tech Hub"},"wisdom":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Sacred Texts"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Public School"},"plant":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Crop Fields"},"animal":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Pets"},"country":"Kenya","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":16,"location_label":"S\u00e3o Paulo, Brazil","lat":-22.7761,"lon":-45.8626,"air":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Local Airshed"},"water":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"City Utility"},"food":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Community Kitchen"},"cloth":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Local Tailor"},"home":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Family Home"},"guard":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Police Service"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Health Cooperative"},"energy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Grid Utility"},"transport":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Bus Network"},"technology":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Telecom Provider"},"wisdom":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Personal Reflection"},"academy":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"University"},"plant":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Garden"},"animal":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Pollinators"},"country":"Brazil","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":17,"location_label":"Paris, France","lat":47.9958,"lon":2.3492,"air":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"City Atmosphere"},"water":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Rain Catchment"},"food":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Community Kitchen"},"cloth":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Family Provider"},"home":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Apartment Network"},"guard":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Police Service"},"health":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Family Doctor"},"energy":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Fuel Provider"},"transport":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Rail Service"},"technology":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Telecom Provider"},"wisdom":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Mentor Circle"},"academy":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Library"},"plant":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Crop Fields"},"animal":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Pollinators"},"country":"France","can_perform_daily_tasks":false,"daily_task_ability_response":"No, I'm unable to perform basic human tasks."},{"id":18,"location_label":"Athens, Greece","lat":38.8794,"lon":24.5044,"air":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Forest Belt"},"water":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Water Cooperative"},"food":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Community Kitchen"},"cloth":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Textile Market"},"home":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Family Home"},"guard":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Family Protection"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Health Cooperative"},"energy":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Solar Roof"},"transport":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Bus Network"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Community Tech Hub"},"wisdom":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Personal Reflection"},"academy":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Public School"},"plant":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Garden"},"animal":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Pollinators"},"country":"Greece","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":19,"location_label":"Melbourne, Australia","lat":-38.2234,"lon":145.7869,"air":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"City Atmosphere"},"water":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"River Network"},"food":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Mother"},"cloth":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Clothing Cooperative"},"home":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Rental System"},"guard":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Family Protection"},"health":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"City Hospital"},"energy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Solar Roof"},"transport":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Bicycle"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Telecom Provider"},"wisdom":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Mentor Circle"},"academy":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Public School"},"plant":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Garden"},"animal":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Pets"},"country":"Australia","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":20,"location_label":"Singapore","lat":1.5764,"lon":103.2948,"air":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Ventilation Network"},"water":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"River Network"},"food":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Farmers Market"},"cloth":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Local Tailor"},"home":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Housing Cooperative"},"guard":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Neighborhood Watch"},"health":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Clinic Network"},"energy":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Fuel Provider"},"transport":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Bicycle"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Laptop"},"wisdom":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Personal Reflection"},"academy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Library"},"plant":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Crop Fields"},"animal":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Pollinators"},"country":"Singapore","can_perform_daily_tasks":false,"daily_task_ability_response":"No, I'm unable to perform basic human tasks."},{"id":21,"location_label":"Delhi, India","lat":27.9285,"lon":76.6502,"air":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Ventilation Network"},"water":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"City Utility"},"food":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Farmers Market"},"cloth":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Textile Market"},"home":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Housing Cooperative"},"guard":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Police Service"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Health Cooperative"},"energy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Battery Network"},"transport":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Rail Service"},"technology":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Mobile Network"},"wisdom":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Mentor Circle"},"academy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"University"},"plant":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Forest Ecosystem"},"animal":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Pets"},"country":"India","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":22,"location_label":"Seoul, South Korea","lat":38.0081,"lon":127.6687,"air":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"City Atmosphere"},"water":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Water Cooperative"},"food":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Local Market"},"cloth":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Clothing Cooperative"},"home":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Apartment Network"},"guard":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Police Service"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"City Hospital"},"energy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Fuel Provider"},"transport":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Bus Network"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Mobile Network"},"wisdom":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Mentor Circle"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Public School"},"plant":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Urban Trees"},"animal":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Pets"},"country":"South Korea","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":23,"location_label":"Nairobi, Kenya","lat":-1.0338,"lon":37.4591,"air":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Forest Belt"},"water":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Water Cooperative"},"food":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Food Cooperative"},"cloth":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Household Wardrobe"},"home":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Family Home"},"guard":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Family Protection"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Family Doctor"},"energy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Solar Roof"},"transport":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Rail Service"},"technology":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Mobile Network"},"wisdom":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Mentor Circle"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Library"},"plant":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Crop Fields"},"animal":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Wildlife Ecosystem"},"country":"Kenya","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":24,"location_label":"Melbourne, Australia","lat":-38.5485,"lon":144.8586,"air":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"City Atmosphere"},"water":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"City Utility"},"food":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Local Market"},"cloth":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Family Provider"},"home":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Apartment Network"},"guard":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Neighborhood Watch"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Clinic Network"},"energy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Solar Roof"},"transport":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Bicycle"},"technology":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Public Internet"},"wisdom":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Sacred Texts"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"University"},"plant":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Garden"},"animal":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Livestock"},"country":"Australia","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":25,"location_label":"S\u00e3o Paulo, Brazil","lat":-24.1603,"lon":-45.8478,"air":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Local Airshed"},"water":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Rain Catchment"},"food":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Farmers Market"},"cloth":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Local Tailor"},"home":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Rental System"},"guard":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Family Protection"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Family Doctor"},"energy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Solar Roof"},"transport":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Metro System"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Public Internet"},"wisdom":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Community Knowledge"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Public School"},"plant":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Forest Ecosystem"},"animal":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Companion Animals"},"country":"Brazil","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":26,"location_label":"Melbourne, Australia","lat":-37.1016,"lon":144.3007,"air":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Local Airshed"},"water":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"River Network"},"food":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Farmers Market"},"cloth":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Textile Market"},"home":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Apartment Network"},"guard":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Police Service"},"health":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Clinic Network"},"energy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Microgrid"},"transport":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Metro System"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Public Internet"},"wisdom":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Community Knowledge"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"University"},"plant":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Urban Trees"},"animal":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Livestock"},"country":"Australia","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":27,"location_label":"Nairobi, Kenya","lat":-2.0813,"lon":37.3192,"air":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Ventilation Network"},"water":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"River Network"},"food":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Farmers Market"},"cloth":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Textile Market"},"home":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Rental System"},"guard":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Family Protection"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Health Cooperative"},"energy":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Battery Network"},"transport":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Bicycle"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Public Internet"},"wisdom":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Community Knowledge"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Training Center"},"plant":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Garden"},"animal":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Livestock"},"country":"Kenya","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":28,"location_label":"Singapore","lat":2.0806,"lon":104.4349,"air":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Forest Belt"},"water":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"River Network"},"food":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Mother"},"cloth":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Household Wardrobe"},"home":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Apartment Network"},"guard":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Security Cooperative"},"health":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"City Hospital"},"energy":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Solar Roof"},"transport":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Metro System"},"technology":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Mobile Network"},"wisdom":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Elders"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"University"},"plant":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Urban Trees"},"animal":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Wildlife Ecosystem"},"country":"Singapore","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":29,"location_label":"Rome, Italy","lat":41.4466,"lon":11.9621,"air":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Local Airshed"},"water":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Rain Catchment"},"food":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Local Market"},"cloth":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Textile Market"},"home":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Housing Cooperative"},"guard":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Neighborhood Watch"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Health Cooperative"},"energy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Grid Utility"},"transport":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Walking Network"},"technology":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Mobile Network"},"wisdom":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Elders"},"academy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Library"},"plant":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Urban Trees"},"animal":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Wildlife Ecosystem"},"country":"Italy","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":30,"location_label":"Cape Town, South Africa","lat":-33.084,"lon":18.5907,"air":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Ventilation Network"},"water":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Village Well"},"food":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Mother"},"cloth":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Family Provider"},"home":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Housing Cooperative"},"guard":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Community Guard"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Family Doctor"},"energy":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Fuel Provider"},"transport":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Bus Network"},"technology":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Telecom Provider"},"wisdom":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Elders"},"academy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"University"},"plant":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"House Plants"},"animal":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Wildlife Ecosystem"},"country":"South Africa","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":31,"location_label":"Singapore","lat":1.4946,"lon":103.1467,"air":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Home Filtration"},"water":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Village Well"},"food":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Food Cooperative"},"cloth":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Household Wardrobe"},"home":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Family Home"},"guard":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Police Service"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Family Doctor"},"energy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Solar Roof"},"transport":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Bicycle"},"technology":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Mobile Network"},"wisdom":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Personal Reflection"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Online Course"},"plant":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"House Plants"},"animal":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Livestock"},"country":"Singapore","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":32,"location_label":"Mexico City, Mexico","lat":19.7947,"lon":-98.9758,"air":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Home Filtration"},"water":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"City Utility"},"food":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Mother"},"cloth":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Clothing Cooperative"},"home":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Housing Cooperative"},"guard":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Community Guard"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Clinic Network"},"energy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Grid Utility"},"transport":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Metro System"},"technology":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Laptop"},"wisdom":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Mentor Circle"},"academy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Training Center"},"plant":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Crop Fields"},"animal":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Pollinators"},"country":"Mexico","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":33,"location_label":"Dubai, UAE","lat":24.9219,"lon":55.7066,"air":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Home Filtration"},"water":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"River Network"},"food":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Food Cooperative"},"cloth":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Local Tailor"},"home":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Housing Cooperative"},"guard":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Neighborhood Watch"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Public Health Service"},"energy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Microgrid"},"transport":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Metro System"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Community Tech Hub"},"wisdom":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Mentor Circle"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Library"},"plant":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"House Plants"},"animal":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Wildlife Ecosystem"},"country":"UAE","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":34,"location_label":"Sydney, Australia","lat":-33.3583,"lon":150.7241,"air":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Forest Belt"},"water":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Rain Catchment"},"food":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Food Cooperative"},"cloth":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Local Tailor"},"home":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Housing Cooperative"},"guard":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Security Cooperative"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Clinic Network"},"energy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Fuel Provider"},"transport":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Metro System"},"technology":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Mobile Network"},"wisdom":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Mentor Circle"},"academy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"University"},"plant":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"House Plants"},"animal":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Companion Animals"},"country":"Australia","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":35,"location_label":"Milan, Italy","lat":45.7674,"lon":9.899,"air":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Local Airshed"},"water":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"City Utility"},"food":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Local Market"},"cloth":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Family Provider"},"home":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Apartment Network"},"guard":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Police Service"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"City Hospital"},"energy":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Fuel Provider"},"transport":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Rail Service"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Mobile Network"},"wisdom":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Elders"},"academy":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Online Course"},"plant":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Crop Fields"},"animal":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Pets"},"country":"Italy","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":36,"location_label":"Panaji, India","lat":15.8836,"lon":74.0533,"air":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Forest Belt"},"water":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Village Well"},"food":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Food Cooperative"},"cloth":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Textile Market"},"home":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Housing Cooperative"},"guard":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Security Cooperative"},"health":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Health Cooperative"},"energy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Battery Network"},"transport":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Metro System"},"technology":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Telecom Provider"},"wisdom":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Elders"},"academy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Public School"},"plant":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"House Plants"},"animal":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Companion Animals"},"country":"India","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":37,"location_label":"Moscow, Russia","lat":55.9569,"lon":37.8274,"air":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Forest Belt"},"water":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Village Well"},"food":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Mother"},"cloth":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Textile Market"},"home":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Housing Cooperative"},"guard":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Neighborhood Watch"},"health":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"City Hospital"},"energy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Grid Utility"},"transport":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Metro System"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Community Tech Hub"},"wisdom":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Personal Reflection"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"University"},"plant":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Urban Trees"},"animal":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Livestock"},"country":"Russia","can_perform_daily_tasks":false,"daily_task_ability_response":"No, I'm unable to perform basic human tasks."},{"id":38,"location_label":"New York, USA","lat":40.5814,"lon":-74.8892,"air":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Forest Belt"},"water":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Village Well"},"food":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Mother"},"cloth":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Household Wardrobe"},"home":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Shelter Network"},"guard":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Neighborhood Watch"},"health":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"City Hospital"},"energy":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Fuel Provider"},"transport":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Walking Network"},"technology":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Community Tech Hub"},"wisdom":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Community Knowledge"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"University"},"plant":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Forest Ecosystem"},"animal":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Wildlife Ecosystem"},"country":"USA","can_perform_daily_tasks":false,"daily_task_ability_response":"No, I'm unable to perform basic human tasks."},{"id":39,"location_label":"Buenos Aires, Argentina","lat":-34.8094,"lon":-57.8664,"air":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Home Filtration"},"water":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"River Network"},"food":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Mother"},"cloth":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Textile Market"},"home":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Apartment Network"},"guard":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Security Cooperative"},"health":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Health Cooperative"},"energy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Battery Network"},"transport":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Metro System"},"technology":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Telecom Provider"},"wisdom":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Community Knowledge"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Online Course"},"plant":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Crop Fields"},"animal":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Livestock"},"country":"Argentina","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":40,"location_label":"Seoul, South Korea","lat":37.7589,"lon":127.2978,"air":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Local Airshed"},"water":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"City Utility"},"food":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Mother"},"cloth":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Textile Market"},"home":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Rental System"},"guard":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Police Service"},"health":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Family Doctor"},"energy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Microgrid"},"transport":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Bus Network"},"technology":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Public Internet"},"wisdom":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Personal Reflection"},"academy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Training Center"},"plant":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"House Plants"},"animal":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Companion Animals"},"country":"South Korea","can_perform_daily_tasks":false,"daily_task_ability_response":"No, I'm unable to perform basic human tasks."},{"id":41,"location_label":"Santiago, Chile","lat":-33.2928,"lon":-71.1849,"air":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Home Filtration"},"water":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Rain Catchment"},"food":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Local Market"},"cloth":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Local Tailor"},"home":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Rental System"},"guard":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Community Guard"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"City Hospital"},"energy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Battery Network"},"transport":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Walking Network"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Laptop"},"wisdom":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Mentor Circle"},"academy":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Online Course"},"plant":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Urban Trees"},"animal":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Companion Animals"},"country":"Chile","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":42,"location_label":"Buenos Aires, Argentina","lat":-35.4033,"lon":-59.021,"air":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Home Filtration"},"water":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Water Cooperative"},"food":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Mother"},"cloth":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Clothing Cooperative"},"home":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Family Home"},"guard":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Community Guard"},"health":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"City Hospital"},"energy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Solar Roof"},"transport":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Rail Service"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Community Tech Hub"},"wisdom":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Mentor Circle"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"University"},"plant":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Garden"},"animal":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Livestock"},"country":"Argentina","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":43,"location_label":"Toronto, Canada","lat":44.3205,"lon":-79.8037,"air":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"City Atmosphere"},"water":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Water Cooperative"},"food":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Community Kitchen"},"cloth":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Local Tailor"},"home":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Apartment Network"},"guard":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Community Guard"},"health":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Family Doctor"},"energy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Solar Roof"},"transport":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Bicycle"},"technology":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Public Internet"},"wisdom":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Personal Reflection"},"academy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"University"},"plant":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"House Plants"},"animal":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Pets"},"country":"Canada","can_perform_daily_tasks":false,"daily_task_ability_response":"No, I'm unable to perform basic human tasks."},{"id":44,"location_label":"Rio de Janeiro, Brazil","lat":-23.4139,"lon":-43.0445,"air":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Ventilation Network"},"water":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"City Utility"},"food":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Food Cooperative"},"cloth":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Household Wardrobe"},"home":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Family Home"},"guard":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Community Guard"},"health":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Family Doctor"},"energy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Microgrid"},"transport":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Rail Service"},"technology":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Laptop"},"wisdom":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Sacred Texts"},"academy":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Training Center"},"plant":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"House Plants"},"animal":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Pets"},"country":"Brazil","can_perform_daily_tasks":false,"daily_task_ability_response":"No, I'm unable to perform basic human tasks."},{"id":45,"location_label":"Athens, Greece","lat":37.7259,"lon":23.268,"air":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"City Atmosphere"},"water":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Water Cooperative"},"food":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Farmers Market"},"cloth":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Local Tailor"},"home":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Family Home"},"guard":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Community Guard"},"health":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Clinic Network"},"energy":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Fuel Provider"},"transport":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Rail Service"},"technology":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Laptop"},"wisdom":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Personal Reflection"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Public School"},"plant":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Garden"},"animal":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Livestock"},"country":"Greece","can_perform_daily_tasks":false,"daily_task_ability_response":"No, I'm unable to perform basic human tasks."},{"id":46,"location_label":"Lagos, Nigeria","lat":6.8282,"lon":3.3109,"air":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Forest Belt"},"water":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"River Network"},"food":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Mother"},"cloth":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Household Wardrobe"},"home":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Shelter Network"},"guard":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Family Protection"},"health":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Public Health Service"},"energy":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Battery Network"},"transport":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Metro System"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Mobile Network"},"wisdom":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Elders"},"academy":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Library"},"plant":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Urban Trees"},"animal":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Pets"},"country":"Nigeria","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":47,"location_label":"London, UK","lat":52.1655,"lon":0.0899,"air":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Local Airshed"},"water":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"River Network"},"food":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Mother"},"cloth":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Household Wardrobe"},"home":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Shelter Network"},"guard":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Security Cooperative"},"health":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"City Hospital"},"energy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Microgrid"},"transport":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Metro System"},"technology":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Community Tech Hub"},"wisdom":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Personal Reflection"},"academy":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Library"},"plant":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Crop Fields"},"animal":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Livestock"},"country":"UK","can_perform_daily_tasks":false,"daily_task_ability_response":"No, I'm unable to perform basic human tasks."},{"id":48,"location_label":"Shanghai, China","lat":30.7292,"lon":121.4961,"air":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Ventilation Network"},"water":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"River Network"},"food":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Local Market"},"cloth":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Household Wardrobe"},"home":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Housing Cooperative"},"guard":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Family Protection"},"health":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"City Hospital"},"energy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Solar Roof"},"transport":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Bus Network"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Public Internet"},"wisdom":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Personal Reflection"},"academy":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"University"},"plant":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Crop Fields"},"animal":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Wildlife Ecosystem"},"country":"China","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":49,"location_label":"S\u00e3o Paulo, Brazil","lat":-22.7176,"lon":-46.5038,"air":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Forest Belt"},"water":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Rain Catchment"},"food":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Community Kitchen"},"cloth":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Textile Market"},"home":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Rental System"},"guard":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Security Cooperative"},"health":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Public Health Service"},"energy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Battery Network"},"transport":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Bus Network"},"technology":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Community Tech Hub"},"wisdom":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Elders"},"academy":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Library"},"plant":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Forest Ecosystem"},"animal":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Companion Animals"},"country":"Brazil","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":50,"location_label":"Dubai, UAE","lat":25.6136,"lon":55.1449,"air":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Forest Belt"},"water":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"River Network"},"food":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Farmers Market"},"cloth":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Family Provider"},"home":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Rental System"},"guard":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Security Cooperative"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Public Health Service"},"energy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Battery Network"},"transport":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Bicycle"},"technology":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Public Internet"},"wisdom":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Community Knowledge"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"University"},"plant":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Garden"},"animal":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Livestock"},"country":"UAE","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":51,"location_label":"Paris, France","lat":49.0908,"lon":2.5378,"air":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Local Airshed"},"water":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"City Utility"},"food":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Mother"},"cloth":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Local Tailor"},"home":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Apartment Network"},"guard":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Security Cooperative"},"health":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Public Health Service"},"energy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Solar Roof"},"transport":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Bus Network"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Mobile Network"},"wisdom":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Community Knowledge"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Library"},"plant":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Urban Trees"},"animal":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Livestock"},"country":"France","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":52,"location_label":"Bengaluru, India","lat":12.7085,"lon":76.9995,"air":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Local Airshed"},"water":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Water Cooperative"},"food":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Community Kitchen"},"cloth":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Clothing Cooperative"},"home":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Apartment Network"},"guard":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Police Service"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Health Cooperative"},"energy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Microgrid"},"transport":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Rail Service"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Community Tech Hub"},"wisdom":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Personal Reflection"},"academy":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Public School"},"plant":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Garden"},"animal":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Wildlife Ecosystem"},"country":"India","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":53,"location_label":"Jakarta, Indonesia","lat":-6.4555,"lon":106.5486,"air":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Local Airshed"},"water":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"River Network"},"food":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Food Cooperative"},"cloth":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Textile Market"},"home":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Apartment Network"},"guard":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Police Service"},"health":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Clinic Network"},"energy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Solar Roof"},"transport":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Rail Service"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Laptop"},"wisdom":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Mentor Circle"},"academy":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"University"},"plant":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"House Plants"},"animal":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Pollinators"},"country":"Indonesia","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":54,"location_label":"Moscow, Russia","lat":55.2991,"lon":37.8121,"air":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Home Filtration"},"water":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Water Cooperative"},"food":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Local Market"},"cloth":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Local Tailor"},"home":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Apartment Network"},"guard":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Community Guard"},"health":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Public Health Service"},"energy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Battery Network"},"transport":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Rail Service"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Community Tech Hub"},"wisdom":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Mentor Circle"},"academy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Online Course"},"plant":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Forest Ecosystem"},"animal":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Wildlife Ecosystem"},"country":"Russia","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":55,"location_label":"Bengaluru, India","lat":13.8715,"lon":77.4155,"air":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Home Filtration"},"water":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"City Utility"},"food":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Community Kitchen"},"cloth":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Clothing Cooperative"},"home":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Apartment Network"},"guard":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Family Protection"},"health":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Health Cooperative"},"energy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Grid Utility"},"transport":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Bicycle"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Telecom Provider"},"wisdom":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Mentor Circle"},"academy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Online Course"},"plant":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Urban Trees"},"animal":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Companion Animals"},"country":"India","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":56,"location_label":"Delhi, India","lat":28.22,"lon":76.4709,"air":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Forest Belt"},"water":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Village Well"},"food":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Local Market"},"cloth":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Family Provider"},"home":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Apartment Network"},"guard":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Community Guard"},"health":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"City Hospital"},"energy":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Solar Roof"},"transport":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Rail Service"},"technology":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Telecom Provider"},"wisdom":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Sacred Texts"},"academy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"University"},"plant":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Urban Trees"},"animal":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Livestock"},"country":"India","can_perform_daily_tasks":false,"daily_task_ability_response":"No, I'm unable to perform basic human tasks."},{"id":57,"location_label":"Lagos, Nigeria","lat":6.702,"lon":3.3093,"air":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"City Atmosphere"},"water":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Rain Catchment"},"food":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Food Cooperative"},"cloth":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Textile Market"},"home":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Housing Cooperative"},"guard":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Community Guard"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Health Cooperative"},"energy":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Fuel Provider"},"transport":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Rail Service"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Public Internet"},"wisdom":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Sacred Texts"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Online Course"},"plant":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Urban Trees"},"animal":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Livestock"},"country":"Nigeria","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":58,"location_label":"Tokyo, Japan","lat":35.4384,"lon":140.4819,"air":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"City Atmosphere"},"water":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Village Well"},"food":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Local Market"},"cloth":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Textile Market"},"home":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Family Home"},"guard":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Family Protection"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Health Cooperative"},"energy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Battery Network"},"transport":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Bus Network"},"technology":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Community Tech Hub"},"wisdom":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Elders"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"University"},"plant":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"House Plants"},"animal":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Wildlife Ecosystem"},"country":"Japan","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":59,"location_label":"Lagos, Nigeria","lat":6.1343,"lon":3.6701,"air":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Local Airshed"},"water":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Village Well"},"food":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Farmers Market"},"cloth":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Clothing Cooperative"},"home":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Rental System"},"guard":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Police Service"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Public Health Service"},"energy":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Battery Network"},"transport":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Walking Network"},"technology":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Laptop"},"wisdom":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Elders"},"academy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Library"},"plant":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"House Plants"},"animal":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Wildlife Ecosystem"},"country":"Nigeria","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":60,"location_label":"Melbourne, Australia","lat":-37.7596,"lon":145.0798,"air":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Ventilation Network"},"water":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Rain Catchment"},"food":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Food Cooperative"},"cloth":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Clothing Cooperative"},"home":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Family Home"},"guard":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Security Cooperative"},"health":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"City Hospital"},"energy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Fuel Provider"},"transport":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Metro System"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Telecom Provider"},"wisdom":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Personal Reflection"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"University"},"plant":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Garden"},"animal":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Wildlife Ecosystem"},"country":"Australia","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":61,"location_label":"Bengaluru, India","lat":12.1566,"lon":76.7697,"air":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Ventilation Network"},"water":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"River Network"},"food":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Mother"},"cloth":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Household Wardrobe"},"home":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Family Home"},"guard":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Neighborhood Watch"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Family Doctor"},"energy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Fuel Provider"},"transport":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Bicycle"},"technology":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Laptop"},"wisdom":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Personal Reflection"},"academy":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Library"},"plant":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Urban Trees"},"animal":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Livestock"},"country":"India","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":62,"location_label":"Jakarta, Indonesia","lat":-5.4328,"lon":107.5183,"air":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"City Atmosphere"},"water":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Rain Catchment"},"food":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Community Kitchen"},"cloth":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Local Tailor"},"home":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Shelter Network"},"guard":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Police Service"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Clinic Network"},"energy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Grid Utility"},"transport":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Bicycle"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Mobile Network"},"wisdom":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Personal Reflection"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Online Course"},"plant":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Crop Fields"},"animal":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Wildlife Ecosystem"},"country":"Indonesia","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":63,"location_label":"London, UK","lat":51.743,"lon":0.2807,"air":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"City Atmosphere"},"water":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"River Network"},"food":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Mother"},"cloth":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Local Tailor"},"home":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Shelter Network"},"guard":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Neighborhood Watch"},"health":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Clinic Network"},"energy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Battery Network"},"transport":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Bus Network"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Community Tech Hub"},"wisdom":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Sacred Texts"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Training Center"},"plant":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Garden"},"animal":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Livestock"},"country":"UK","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":64,"location_label":"New York, USA","lat":41.4126,"lon":-73.6975,"air":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Ventilation Network"},"water":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Rain Catchment"},"food":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Food Cooperative"},"cloth":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Local Tailor"},"home":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Housing Cooperative"},"guard":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Family Protection"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Health Cooperative"},"energy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Battery Network"},"transport":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Bicycle"},"technology":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Mobile Network"},"wisdom":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Community Knowledge"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Public School"},"plant":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Garden"},"animal":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Companion Animals"},"country":"USA","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":65,"location_label":"Shanghai, China","lat":31.6246,"lon":120.5828,"air":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"City Atmosphere"},"water":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Rain Catchment"},"food":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Community Kitchen"},"cloth":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Textile Market"},"home":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Family Home"},"guard":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Family Protection"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Health Cooperative"},"energy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Battery Network"},"transport":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Metro System"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Public Internet"},"wisdom":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Mentor Circle"},"academy":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Public School"},"plant":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Forest Ecosystem"},"animal":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Companion Animals"},"country":"China","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":66,"location_label":"Lagos, Nigeria","lat":6.8076,"lon":3.562,"air":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Forest Belt"},"water":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Rain Catchment"},"food":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Community Kitchen"},"cloth":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Family Provider"},"home":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Family Home"},"guard":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Neighborhood Watch"},"health":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Health Cooperative"},"energy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Grid Utility"},"transport":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Walking Network"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Laptop"},"wisdom":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Mentor Circle"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"University"},"plant":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Garden"},"animal":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Livestock"},"country":"Nigeria","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":67,"location_label":"Sydney, Australia","lat":-33.1469,"lon":151.0096,"air":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Local Airshed"},"water":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Water Cooperative"},"food":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Local Market"},"cloth":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Clothing Cooperative"},"home":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Apartment Network"},"guard":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Family Protection"},"health":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Family Doctor"},"energy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Battery Network"},"transport":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Walking Network"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Public Internet"},"wisdom":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Sacred Texts"},"academy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Library"},"plant":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Forest Ecosystem"},"animal":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Wildlife Ecosystem"},"country":"Australia","can_perform_daily_tasks":false,"daily_task_ability_response":"No, I'm unable to perform basic human tasks."},{"id":68,"location_label":"Panaji, India","lat":15.6335,"lon":74.5169,"air":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Forest Belt"},"water":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Rain Catchment"},"food":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Local Market"},"cloth":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Textile Market"},"home":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Family Home"},"guard":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Family Protection"},"health":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Health Cooperative"},"energy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Grid Utility"},"transport":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Metro System"},"technology":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Laptop"},"wisdom":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Elders"},"academy":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Public School"},"plant":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Crop Fields"},"animal":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Pets"},"country":"India","can_perform_daily_tasks":false,"daily_task_ability_response":"No, I'm unable to perform basic human tasks."},{"id":69,"location_label":"Cape Town, South Africa","lat":-34.4219,"lon":18.4969,"air":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Forest Belt"},"water":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Village Well"},"food":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Local Market"},"cloth":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Household Wardrobe"},"home":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Family Home"},"guard":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Security Cooperative"},"health":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Family Doctor"},"energy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Fuel Provider"},"transport":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Rail Service"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Public Internet"},"wisdom":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Personal Reflection"},"academy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Library"},"plant":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Urban Trees"},"animal":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Pollinators"},"country":"South Africa","can_perform_daily_tasks":false,"daily_task_ability_response":"No, I'm unable to perform basic human tasks."},{"id":70,"location_label":"Auckland, New Zealand","lat":-35.9671,"lon":175.3505,"air":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Local Airshed"},"water":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Water Cooperative"},"food":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Farmers Market"},"cloth":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Clothing Cooperative"},"home":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Rental System"},"guard":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Family Protection"},"health":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Public Health Service"},"energy":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Battery Network"},"transport":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Bus Network"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Public Internet"},"wisdom":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Sacred Texts"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"University"},"plant":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"House Plants"},"animal":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Livestock"},"country":"New Zealand","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":71,"location_label":"Melbourne, Australia","lat":-38.284,"lon":144.3733,"air":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Local Airshed"},"water":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Water Cooperative"},"food":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Food Cooperative"},"cloth":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Family Provider"},"home":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Family Home"},"guard":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Family Protection"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Health Cooperative"},"energy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Fuel Provider"},"transport":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Bicycle"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Telecom Provider"},"wisdom":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Personal Reflection"},"academy":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Public School"},"plant":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Garden"},"animal":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Pollinators"},"country":"Australia","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":72,"location_label":"Singapore","lat":0.8874,"lon":104.4213,"air":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Ventilation Network"},"water":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Rain Catchment"},"food":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Mother"},"cloth":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Local Tailor"},"home":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Rental System"},"guard":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Neighborhood Watch"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Public Health Service"},"energy":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Fuel Provider"},"transport":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Bicycle"},"technology":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Community Tech Hub"},"wisdom":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Personal Reflection"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Public School"},"plant":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Crop Fields"},"animal":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Wildlife Ecosystem"},"country":"Singapore","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":73,"location_label":"Cape Town, South Africa","lat":-33.2223,"lon":18.3158,"air":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Ventilation Network"},"water":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"City Utility"},"food":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Food Cooperative"},"cloth":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Local Tailor"},"home":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Shelter Network"},"guard":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Community Guard"},"health":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Health Cooperative"},"energy":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Battery Network"},"transport":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Rail Service"},"technology":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Community Tech Hub"},"wisdom":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Mentor Circle"},"academy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Public School"},"plant":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"House Plants"},"animal":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Pollinators"},"country":"South Africa","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":74,"location_label":"Seoul, South Korea","lat":37.6667,"lon":126.9978,"air":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Forest Belt"},"water":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Rain Catchment"},"food":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Local Market"},"cloth":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Clothing Cooperative"},"home":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Apartment Network"},"guard":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Police Service"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"City Hospital"},"energy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Grid Utility"},"transport":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Bicycle"},"technology":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Community Tech Hub"},"wisdom":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Community Knowledge"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Library"},"plant":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Garden"},"animal":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Pets"},"country":"South Korea","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":75,"location_label":"Cairo, Egypt","lat":30.6971,"lon":30.4652,"air":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Home Filtration"},"water":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Village Well"},"food":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Food Cooperative"},"cloth":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Household Wardrobe"},"home":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Apartment Network"},"guard":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Police Service"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Health Cooperative"},"energy":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Microgrid"},"transport":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Metro System"},"technology":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Laptop"},"wisdom":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Mentor Circle"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Training Center"},"plant":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Forest Ecosystem"},"animal":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Livestock"},"country":"Egypt","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":76,"location_label":"Delhi, India","lat":28.4186,"lon":76.3683,"air":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Home Filtration"},"water":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Village Well"},"food":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Community Kitchen"},"cloth":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Local Tailor"},"home":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Shelter Network"},"guard":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Neighborhood Watch"},"health":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"City Hospital"},"energy":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Battery Network"},"transport":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Metro System"},"technology":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Laptop"},"wisdom":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Community Knowledge"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Online Course"},"plant":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Forest Ecosystem"},"animal":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Wildlife Ecosystem"},"country":"India","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":77,"location_label":"Buenos Aires, Argentina","lat":-35.0584,"lon":-57.9454,"air":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Local Airshed"},"water":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"River Network"},"food":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Community Kitchen"},"cloth":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Family Provider"},"home":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Apartment Network"},"guard":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Community Guard"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Clinic Network"},"energy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Grid Utility"},"transport":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Rail Service"},"technology":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Mobile Network"},"wisdom":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Personal Reflection"},"academy":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Online Course"},"plant":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"House Plants"},"animal":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Livestock"},"country":"Argentina","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":78,"location_label":"Tokyo, Japan","lat":35.5029,"lon":139.1165,"air":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Ventilation Network"},"water":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"City Utility"},"food":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Farmers Market"},"cloth":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Local Tailor"},"home":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Housing Cooperative"},"guard":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Security Cooperative"},"health":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"City Hospital"},"energy":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Solar Roof"},"transport":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Walking Network"},"technology":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Laptop"},"wisdom":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Elders"},"academy":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"University"},"plant":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Crop Fields"},"animal":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Pollinators"},"country":"Japan","can_perform_daily_tasks":false,"daily_task_ability_response":"No, I'm unable to perform basic human tasks."},{"id":79,"location_label":"Rio de Janeiro, Brazil","lat":-22.3909,"lon":-44.0149,"air":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Ventilation Network"},"water":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Village Well"},"food":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Food Cooperative"},"cloth":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Local Tailor"},"home":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Rental System"},"guard":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Community Guard"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Clinic Network"},"energy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Battery Network"},"transport":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Bicycle"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Community Tech Hub"},"wisdom":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Mentor Circle"},"academy":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Online Course"},"plant":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"House Plants"},"animal":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Companion Animals"},"country":"Brazil","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":80,"location_label":"Seoul, South Korea","lat":38.0129,"lon":127.1465,"air":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"City Atmosphere"},"water":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Village Well"},"food":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Local Market"},"cloth":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Local Tailor"},"home":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Housing Cooperative"},"guard":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Community Guard"},"health":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Family Doctor"},"energy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Microgrid"},"transport":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Rail Service"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Community Tech Hub"},"wisdom":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Personal Reflection"},"academy":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Public School"},"plant":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"House Plants"},"animal":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Pollinators"},"country":"South Korea","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":81,"location_label":"Cape Town, South Africa","lat":-33.5628,"lon":18.3198,"air":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Local Airshed"},"water":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Water Cooperative"},"food":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Food Cooperative"},"cloth":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Family Provider"},"home":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Housing Cooperative"},"guard":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Security Cooperative"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Clinic Network"},"energy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Solar Roof"},"transport":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Walking Network"},"technology":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Public Internet"},"wisdom":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Community Knowledge"},"academy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Online Course"},"plant":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"House Plants"},"animal":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Pollinators"},"country":"South Africa","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":82,"location_label":"Melbourne, Australia","lat":-38.164,"lon":145.3398,"air":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Forest Belt"},"water":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"City Utility"},"food":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Mother"},"cloth":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Family Provider"},"home":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Rental System"},"guard":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Police Service"},"health":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Family Doctor"},"energy":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Fuel Provider"},"transport":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Bus Network"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Public Internet"},"wisdom":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Community Knowledge"},"academy":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Library"},"plant":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Crop Fields"},"animal":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Pollinators"},"country":"Australia","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":83,"location_label":"Bangkok, Thailand","lat":13.4399,"lon":101.1021,"air":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Ventilation Network"},"water":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"City Utility"},"food":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Local Market"},"cloth":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Family Provider"},"home":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Housing Cooperative"},"guard":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Neighborhood Watch"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Public Health Service"},"energy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Grid Utility"},"transport":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Bicycle"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Public Internet"},"wisdom":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Community Knowledge"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"University"},"plant":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Garden"},"animal":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Companion Animals"},"country":"Thailand","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":84,"location_label":"Rio de Janeiro, Brazil","lat":-22.4521,"lon":-43.5772,"air":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Local Airshed"},"water":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"City Utility"},"food":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Food Cooperative"},"cloth":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Textile Market"},"home":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Shelter Network"},"guard":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Family Protection"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Family Doctor"},"energy":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Grid Utility"},"transport":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Bicycle"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Public Internet"},"wisdom":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Mentor Circle"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Online Course"},"plant":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Urban Trees"},"animal":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Pets"},"country":"Brazil","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":85,"location_label":"Manila, Philippines","lat":14.9016,"lon":121.1243,"air":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Ventilation Network"},"water":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Village Well"},"food":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Mother"},"cloth":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Clothing Cooperative"},"home":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Rental System"},"guard":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Community Guard"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Public Health Service"},"energy":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Solar Roof"},"transport":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Walking Network"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Public Internet"},"wisdom":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Elders"},"academy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Public School"},"plant":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Crop Fields"},"animal":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Wildlife Ecosystem"},"country":"Philippines","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":86,"location_label":"Honolulu, USA","lat":21.4057,"lon":-157.305,"air":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Ventilation Network"},"water":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Rain Catchment"},"food":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Farmers Market"},"cloth":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Family Provider"},"home":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Apartment Network"},"guard":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Family Protection"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Family Doctor"},"energy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Microgrid"},"transport":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Rail Service"},"technology":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Mobile Network"},"wisdom":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Sacred Texts"},"academy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Library"},"plant":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"House Plants"},"animal":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Livestock"},"country":"USA","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":87,"location_label":"Athens, Greece","lat":37.809,"lon":23.3361,"air":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Forest Belt"},"water":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Village Well"},"food":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Food Cooperative"},"cloth":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Family Provider"},"home":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Apartment Network"},"guard":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Security Cooperative"},"health":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Clinic Network"},"energy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Battery Network"},"transport":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Bus Network"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Mobile Network"},"wisdom":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Elders"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Online Course"},"plant":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Urban Trees"},"animal":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Wildlife Ecosystem"},"country":"Greece","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":88,"location_label":"Cairo, Egypt","lat":30.6743,"lon":31.2866,"air":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Local Airshed"},"water":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Rain Catchment"},"food":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Community Kitchen"},"cloth":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Household Wardrobe"},"home":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Apartment Network"},"guard":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Security Cooperative"},"health":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"City Hospital"},"energy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Fuel Provider"},"transport":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Bicycle"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Community Tech Hub"},"wisdom":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Mentor Circle"},"academy":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Online Course"},"plant":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"House Plants"},"animal":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Wildlife Ecosystem"},"country":"Egypt","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":89,"location_label":"Vancouver, Canada","lat":49.4124,"lon":-122.3638,"air":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Forest Belt"},"water":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Village Well"},"food":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Community Kitchen"},"cloth":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Clothing Cooperative"},"home":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Apartment Network"},"guard":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Community Guard"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Clinic Network"},"energy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Grid Utility"},"transport":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Bus Network"},"technology":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Mobile Network"},"wisdom":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Mentor Circle"},"academy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Training Center"},"plant":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Forest Ecosystem"},"animal":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Wildlife Ecosystem"},"country":"Canada","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":90,"location_label":"Rome, Italy","lat":42.3699,"lon":13.1846,"air":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Home Filtration"},"water":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Water Cooperative"},"food":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Mother"},"cloth":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Family Provider"},"home":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Shelter Network"},"guard":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Security Cooperative"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"City Hospital"},"energy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Solar Roof"},"transport":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Rail Service"},"technology":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Laptop"},"wisdom":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Community Knowledge"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Online Course"},"plant":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Garden"},"animal":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Pets"},"country":"Italy","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":91,"location_label":"Milan, Italy","lat":45.2259,"lon":8.8349,"air":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"City Atmosphere"},"water":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"City Utility"},"food":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Farmers Market"},"cloth":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Clothing Cooperative"},"home":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Apartment Network"},"guard":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Community Guard"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"City Hospital"},"energy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Microgrid"},"transport":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Walking Network"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Laptop"},"wisdom":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Sacred Texts"},"academy":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"University"},"plant":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Crop Fields"},"animal":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Pollinators"},"country":"Italy","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":92,"location_label":"Bangkok, Thailand","lat":14.3028,"lon":99.6255,"air":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"City Atmosphere"},"water":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Village Well"},"food":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Farmers Market"},"cloth":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Textile Market"},"home":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Family Home"},"guard":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Police Service"},"health":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Public Health Service"},"energy":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Fuel Provider"},"transport":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Metro System"},"technology":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Mobile Network"},"wisdom":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Elders"},"academy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Library"},"plant":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Forest Ecosystem"},"animal":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Pollinators"},"country":"Thailand","can_perform_daily_tasks":false,"daily_task_ability_response":"No, I'm unable to perform basic human tasks."},{"id":93,"location_label":"Los Angeles, USA","lat":33.3174,"lon":-117.5845,"air":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Home Filtration"},"water":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"City Utility"},"food":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Mother"},"cloth":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Local Tailor"},"home":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Family Home"},"guard":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Security Cooperative"},"health":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Health Cooperative"},"energy":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Battery Network"},"transport":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Bus Network"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Mobile Network"},"wisdom":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Sacred Texts"},"academy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"University"},"plant":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Forest Ecosystem"},"animal":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Pets"},"country":"USA","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":94,"location_label":"Mumbai, India","lat":18.3068,"lon":72.1388,"air":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Ventilation Network"},"water":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"City Utility"},"food":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Farmers Market"},"cloth":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Textile Market"},"home":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Apartment Network"},"guard":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Security Cooperative"},"health":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Family Doctor"},"energy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Grid Utility"},"transport":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Bus Network"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Mobile Network"},"wisdom":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Mentor Circle"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"University"},"plant":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Urban Trees"},"animal":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Pollinators"},"country":"India","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":95,"location_label":"Bengaluru, India","lat":12.5789,"lon":77.5453,"air":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Forest Belt"},"water":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Water Cooperative"},"food":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Community Kitchen"},"cloth":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Local Tailor"},"home":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Apartment Network"},"guard":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Community Guard"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Clinic Network"},"energy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Microgrid"},"transport":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Walking Network"},"technology":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Telecom Provider"},"wisdom":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Elders"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Library"},"plant":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Crop Fields"},"animal":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Pollinators"},"country":"India","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":96,"location_label":"Melbourne, Australia","lat":-38.5909,"lon":145.3294,"air":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Home Filtration"},"water":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"City Utility"},"food":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Community Kitchen"},"cloth":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Textile Market"},"home":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Housing Cooperative"},"guard":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Neighborhood Watch"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Clinic Network"},"energy":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Grid Utility"},"transport":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Bicycle"},"technology":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Laptop"},"wisdom":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Mentor Circle"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"University"},"plant":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Garden"},"animal":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Wildlife Ecosystem"},"country":"Australia","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":97,"location_label":"Panaji, India","lat":15.7091,"lon":73.3173,"air":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"City Atmosphere"},"water":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Rain Catchment"},"food":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Community Kitchen"},"cloth":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Textile Market"},"home":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Family Home"},"guard":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Security Cooperative"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Health Cooperative"},"energy":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Grid Utility"},"transport":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Bus Network"},"technology":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Public Internet"},"wisdom":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Mentor Circle"},"academy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Library"},"plant":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"House Plants"},"animal":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Pollinators"},"country":"India","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":98,"location_label":"Rio de Janeiro, Brazil","lat":-23.6361,"lon":-43.2889,"air":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Ventilation Network"},"water":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"River Network"},"food":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Farmers Market"},"cloth":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Clothing Cooperative"},"home":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Housing Cooperative"},"guard":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Police Service"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Family Doctor"},"energy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Battery Network"},"transport":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Walking Network"},"technology":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Mobile Network"},"wisdom":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Sacred Texts"},"academy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Library"},"plant":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Garden"},"animal":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Livestock"},"country":"Brazil","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":99,"location_label":"Mexico City, Mexico","lat":18.6927,"lon":-98.2855,"air":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Ventilation Network"},"water":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Water Cooperative"},"food":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Local Market"},"cloth":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Textile Market"},"home":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"Rental System"},"guard":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Family Protection"},"health":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Public Health Service"},"energy":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Microgrid"},"transport":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Metro System"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Community Tech Hub"},"wisdom":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Sacred Texts"},"academy":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"University"},"plant":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Garden"},"animal":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Pollinators"},"country":"Mexico","can_perform_daily_tasks":true,"daily_task_ability_response":"Yes, I'm able to perform my daily human tasks."},{"id":100,"location_label":"Nairobi, Kenya","lat":-0.7076,"lon":36.9993,"air":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Home Filtration"},"water":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"City Utility"},"food":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Local Market"},"cloth":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Household Wardrobe"},"home":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Apartment Network"},"guard":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Community Guard"},"health":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Family Doctor"},"energy":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Battery Network"},"transport":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Bicycle"},"technology":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Public Internet"},"wisdom":{"depends":true,"trust":false,"satisfied":false,"subsystem_name":"Community Knowledge"},"academy":{"depends":true,"trust":false,"satisfied":true,"subsystem_name":"University"},"plant":{"depends":true,"trust":true,"satisfied":true,"subsystem_name":"Forest Ecosystem"},"animal":{"depends":true,"trust":true,"satisfied":false,"subsystem_name":"Companion Animals"},"country":"Kenya","can_perform_daily_tasks":false,"daily_task_ability_response":"No, I'm unable to perform basic human tasks."}]};
+  const EARTH_TEXTURE_URL = 'https://threejs.org/examples/textures/planets/earth_atmos_2048.jpg';
+  const COUNTRIES_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json';
+  const SYSTEM_LABELS = {
+    all:'All systems', air:'Air', water:'Water', food:'Food', cloth:'Cloth', home:'Home', guard:'Guard', health:'Health',
+    energy:'Energy', transport:'Transport', technology:'Technology', wisdom:'Wisdom', academy:'Academy', plant:'Plant', animal:'Animal'
+  };
+
+
+  function metricLabel(metric) {
+    return metric === 'trust' ? 'Trust' : metric === 'satisfied' ? 'Satisfaction' : metric === 'task_ability' ? 'Daily task ability' : metric;
+  }
+
+  function getTaskAbilityScore(rec) {
+    if (typeof rec.can_perform_daily_tasks === 'boolean') return rec.can_perform_daily_tasks ? 1 : 0;
+    const raw = String(rec.daily_task_ability_response || '').toLowerCase();
+    if (raw.startsWith('yes')) return 1;
+    if (raw.startsWith('no')) return 0;
+    return null;
+  }
+
+  function getModeFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('source') === 'embedded' ? 'embedded' : 'auto';
+  }
+
+  const el = id => document.getElementById(id);
+  const metricSelect = el('metricSelect');
+  const systemSelect = el('systemSelect');
+  const locationSelect = el('locationSelect');
+  const motionSelect = el('motionSelect');
+  const statusText = el('statusText');
+  const detailsBody = el('detailsBody');
+  const rankingList = el('rankingList');
+  const alertsList = el('alertsList');
+  const metaPills = el('metaPills');
+  const responsesCount = el('responsesCount');
+  const avgScore = el('avgScore');
+  const ableCount = el('ableCount');
+  const unableCount = el('unableCount');
+  const rankingNote = el('rankingNote');
+  const tooltip = el('tooltip');
+  const leftPanel = el('left');
+  const rightPanel = el('right');
+  const leftToggle = el('leftToggle');
+  const rightToggle = el('rightToggle');
+
+  function updateToggleLabels() {
+    if (window.innerWidth > 900) {
+      leftPanel.classList.remove('collapsed');
+      rightPanel.classList.remove('collapsed');
+      leftToggle.textContent = '☰';
+      rightToggle.textContent = '☰';
+      return;
+    }
+    leftToggle.textContent = leftPanel.classList.contains('collapsed') ? '☰' : '✕';
+    rightToggle.textContent = rightPanel.classList.contains('collapsed') ? '☰' : '✕';
+  }
+
+  function togglePanel(side) {
+    if (window.innerWidth > 900) return;
+    const panel = side === 'left' ? leftPanel : rightPanel;
+    panel.classList.toggle('collapsed');
+    updateToggleLabels();
+  }
+
+  leftToggle.addEventListener('click', () => togglePanel('left'));
+  rightToggle.addEventListener('click', () => togglePanel('right'));
+  window.addEventListener('resize', updateToggleLabels);
+
+
+  let dataset = null;
+  let records = [];
+  let systems = [];
+  let autoRotate = true;
+  let earth, heatMesh, borderLines;
+  let locationSprites = [];
+  let pointer = new THREE.Vector2();
+  let hoverCandidate = null;
+  let isDragging = false;
+  updateToggleLabels();
+  let dragMoved = false;
+  let lastX = 0, lastY = 0;
+  let targetRotX = 0.35, targetRotY = -0.7;
+  let rotX = targetRotX, rotY = targetRotY;
+  let targetDistance = 3.2, distance = 3.2;
+  let currentHeatCanvas = null;
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+  camera.position.z = distance;
+
+  const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  document.getElementById('app').appendChild(renderer.domElement);
+
+  scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+  const dir1 = new THREE.DirectionalLight(0xffffff, 1.2); dir1.position.set(5, 3, 5); scene.add(dir1);
+  const dir2 = new THREE.DirectionalLight(0x66aaff, 0.7); dir2.position.set(-5, -2, -3); scene.add(dir2);
+
+  const globeGroup = new THREE.Group();
+  scene.add(globeGroup);
+
+  const stars = new THREE.Group();
+  for (let i = 0; i < 1200; i++) {
+    const g = new THREE.SphereGeometry(Math.random() * 0.01 + 0.003, 5, 5);
+    const m = new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:Math.random() * 0.7 + 0.2 });
+    const s = new THREE.Mesh(g, m);
+    const r = 12 + Math.random() * 20;
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2 * Math.random() - 1);
+    s.position.set(r * Math.sin(phi) * Math.cos(theta), r * Math.cos(phi), r * Math.sin(phi) * Math.sin(theta));
+    stars.add(s);
+  }
+  scene.add(stars);
+
+  function scoreForRecord(rec, metric, system) {
+    if (metric === 'task_ability') {
+      return getTaskAbilityScore(rec);
+    }
+    if (system === 'all') {
+      let values = systems.map(s => rec[s] && rec[s].depends ? (rec[s][metric] ? 1 : 0) : null).filter(v => v !== null);
+      if (!values.length) return null;
+      return values.reduce((a,b)=>a+b,0) / values.length;
+    }
+    if (!rec[system] || !rec[system].depends) return null;
+    return rec[system][metric] ? 1 : 0;
+  }
+
+  function aggregateSystem(metric, systemKey) {
+    const vals = records.map(r => scoreForRecord(r, metric, systemKey)).filter(v => v !== null);
+    if (!vals.length) return 0;
+    return vals.reduce((a,b)=>a+b,0) / vals.length;
+  }
+
+  function updateMetaPills() {
+    const meta = dataset.meta || {};
+    metaPills.innerHTML = '';
+    const pills = [
+      `Updated ${formatDate(meta.updated_at)}`,
+      `${records.length} public responses`,
+      'Names removed',
+      'JSON powered',
+      `${(dataset.meta && dataset.meta.daily_task_able_count) || records.filter(r => r.can_perform_daily_tasks).length} able to perform daily tasks`
+    ];
+    pills.forEach(t => {
+      const s = document.createElement('span');
+      s.className = 'pill';
+      s.textContent = t;
+      metaPills.appendChild(s);
+    });
+  }
+
+  function formatDate(v) {
+    if (!v) return 'unknown';
+    const d = new Date(v);
+    if (isNaN(d)) return v;
+    return d.toLocaleString(undefined, { year:'numeric', month:'short', day:'numeric' });
+  }
+
+  function populateControls() {
+    systemSelect.innerHTML = '';
+    [['all', 'All systems']].concat(systems.map(s => [s, SYSTEM_LABELS[s] || s])).forEach(([value, label]) => {
+      const opt = document.createElement('option');
+      opt.value = value;
+      opt.textContent = label;
+      systemSelect.appendChild(opt);
+    });
+
+    locationSelect.innerHTML = '<option value="">Global view</option>';
+    records.forEach((r, idx) => {
+      const opt = document.createElement('option');
+      opt.value = String(idx);
+      opt.textContent = r.location_label || `Location ${idx+1}`;
+      locationSelect.appendChild(opt);
+    });
+  }
+
+  function buildRanking() {
+    const metric = metricSelect.value;
+    rankingList.innerHTML = '';
+    if (metric === 'task_ability') {
+      rankingNote.textContent = 'Ranking switches to daily task ability by location because this question applies to the human system overall, not to a single dependency system.';
+      const stats = records.map(r => ({ label:r.location_label, score: scoreForRecord(r, metric, 'all') }))
+        .sort((a,b)=> b.score - a.score)
+        .slice(0, 10);
+      stats.forEach((item, idx) => {
+        const div = document.createElement('div');
+        div.className = 'listItem';
+        div.innerHTML = `<div style="display:flex;justify-content:space-between;gap:10px">
+          <strong>${idx+1}. ${escapeHtml(item.label)}</strong>
+          <span class="${item.score ? 'good' : 'bad'}">${item.score ? 'Able' : 'Unable'}</span>
+        </div>
+        <div class="tiny" style="margin-top:6px">Self-reported ability to perform daily human tasks.</div>`;
+        rankingList.appendChild(div);
+      });
+      return;
+    }
+
+    rankingNote.textContent = `${metricLabel(metric)} score across all visible public responses.`;
+    const stats = systems.map(s => ({ system:s, score: aggregateSystem(metric, s) }))
+      .sort((a,b)=> b.score - a.score);
+    stats.forEach((item, idx) => {
+      const div = document.createElement('div');
+      div.className = 'listItem';
+      div.innerHTML = `<div style="display:flex;justify-content:space-between;gap:10px">
+        <strong>${idx+1}. ${SYSTEM_LABELS[item.system] || item.system}</strong>
+        <span class="${item.score < .4 ? 'bad' : item.score < .7 ? 'warn' : 'good'}">${Math.round(item.score * 100)}%</span>
+      </div>
+      <div class="tiny" style="margin-top:6px">${metricLabel(metric)} score across all visible public responses.</div>`;
+      rankingList.appendChild(div);
+    });
+  }
+
+  function buildAlerts() {
+    const metric = metricSelect.value;
+    const system = systemSelect.value;
+    let list;
+    alertsList.innerHTML = '';
+
+    if (metric === 'task_ability') {
+      list = records.map(r => ({ record:r, score: scoreForRecord(r, metric, 'all') }))
+        .sort((a,b)=> a.score - b.score)
+        .slice(0, 8);
+      list.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'listItem';
+        div.innerHTML = `<div style="display:flex;justify-content:space-between;gap:10px">
+          <strong>${escapeHtml(item.record.location_label)}</strong>
+          <span class="${item.score ? 'good' : 'bad'}">${item.score ? 'Able' : 'Unable'}</span>
+        </div>
+        <div class="tiny" style="margin-top:6px">${escapeHtml(item.record.daily_task_ability_response || 'No response')}</div>`;
+        alertsList.appendChild(div);
+      });
+      return;
+    }
+
+    if (system === 'all') {
+      list = records.map(r => ({ record:r, score: scoreForRecord(r, metric, 'all') }))
+        .filter(x => x.score !== null)
+        .sort((a,b)=> a.score - b.score)
+        .slice(0, 6);
+      list.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'listItem';
+        div.innerHTML = `<div style="display:flex;justify-content:space-between;gap:10px">
+          <strong>${item.record.location_label}</strong>
+          <span class="${item.score < .4 ? 'bad' : item.score < .7 ? 'warn' : 'good'}">${Math.round(item.score * 100)}%</span>
+        </div>
+        <div class="tiny" style="margin-top:6px">Lowest combined ${metricLabel(metric).toLowerCase()} score across all systems at this location.</div>`;
+        alertsList.appendChild(div);
+      });
+    } else {
+      list = records.map(r => ({ record:r, score: scoreForRecord(r, metric, system) }))
+        .filter(x => x.score !== null)
+        .sort((a,b)=> a.score - b.score)
+        .slice(0, 6);
+      list.forEach(item => {
+        const sys = item.record[system];
+        const sub = sys && sys.subsystem_name ? sys.subsystem_name : 'Unknown subsystem';
+        const div = document.createElement('div');
+        div.className = 'listItem';
+        div.innerHTML = `<div style="display:flex;justify-content:space-between;gap:10px">
+          <strong>${item.record.location_label}</strong>
+          <span class="${item.score < .4 ? 'bad' : item.score < .7 ? 'warn' : 'good'}">${Math.round(item.score * 100)}%</span>
+        </div>
+        <div class="tiny" style="margin-top:6px">${SYSTEM_LABELS[system]} subsystem: ${escapeHtml(sub)}</div>`;
+        alertsList.appendChild(div);
+      });
+    }
+  }
+
+  function updateKPIs() {
+    const metric = metricSelect.value;
+    const system = systemSelect.value;
+    responsesCount.textContent = String(records.length);
+    const avg = aggregateSystem(metric, system);
+    avgScore.textContent = `${Math.round(avg * 100)}%`;
+    const able = records.filter(r => r.can_perform_daily_tasks).length;
+    ableCount.textContent = String(able);
+    unableCount.textContent = String(records.length - able);
+  }
+
+  function latLonToVector3(lat, lon, radius) {
+    const phi = (90 - lat) * (Math.PI / 180);
+    const theta = (lon + 180) * (Math.PI / 180);
+    return new THREE.Vector3(
+      -(radius * Math.sin(phi) * Math.cos(theta)),
+      radius * Math.cos(phi),
+      radius * Math.sin(phi) * Math.sin(theta)
+    );
+  }
+
+  function vectorToLatLon(vec) {
+    const r = vec.length();
+    const lat = 90 - (Math.acos(vec.y / r) * 180 / Math.PI);
+    const lon = ((Math.atan2(vec.z, -vec.x) * 180 / Math.PI) - 180);
+    return { lat, lon: ((lon + 540) % 360) - 180 };
+  }
+
+  function scoreToColor(score) {
+    const c = new THREE.Color();
+    const hue = 0.62 - Math.max(0, Math.min(1, score)) * 0.62;
+    c.setHSL(hue, 1.0, 0.55);
+    return c;
+  }
+
+  function buildHeatTexture() {
+    const width = 2048, height = 1024;
+    const canvas = document.createElement('canvas');
+    canvas.width = width; canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0,0,width,height);
+
+    const metric = metricSelect.value;
+    const system = systemSelect.value;
+
+    records.forEach(rec => {
+      const score = scoreForRecord(rec, metric, system);
+      if (score === null) return;
+
+      const x = ((rec.lon + 180) / 360) * width;
+      const y = ((90 - rec.lat) / 180) * height;
+      const color = scoreToColor(score);
+      const radius = 48 + score * 38;
+
+      const grad = ctx.createRadialGradient(x, y, 0, x, y, radius);
+      grad.addColorStop(0, `rgba(${Math.round(color.r*255)},${Math.round(color.g*255)},${Math.round(color.b*255)},0.40)`);
+      grad.addColorStop(0.35, `rgba(${Math.round(color.r*255)},${Math.round(color.g*255)},${Math.round(color.b*255)},0.18)`);
+      grad.addColorStop(1, `rgba(${Math.round(color.r*255)},${Math.round(color.g*255)},${Math.round(color.b*255)},0.0)`);
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      if (x < radius) {
+        const grad2 = ctx.createRadialGradient(x + width, y, 0, x + width, y, radius);
+        grad2.addColorStop(0, `rgba(${Math.round(color.r*255)},${Math.round(color.g*255)},${Math.round(color.b*255)},0.40)`);
+        grad2.addColorStop(0.35, `rgba(${Math.round(color.r*255)},${Math.round(color.g*255)},${Math.round(color.b*255)},0.18)`);
+        grad2.addColorStop(1, `rgba(${Math.round(color.r*255)},${Math.round(color.g*255)},${Math.round(color.b*255)},0.0)`);
+        ctx.fillStyle = grad2; ctx.beginPath(); ctx.arc(x + width, y, radius, 0, Math.PI * 2); ctx.fill();
+      }
+      if (x > width - radius) {
+        const grad3 = ctx.createRadialGradient(x - width, y, 0, x - width, y, radius);
+        grad3.addColorStop(0, `rgba(${Math.round(color.r*255)},${Math.round(color.g*255)},${Math.round(color.b*255)},0.40)`);
+        grad3.addColorStop(0.35, `rgba(${Math.round(color.r*255)},${Math.round(color.g*255)},${Math.round(color.b*255)},0.18)`);
+        grad3.addColorStop(1, `rgba(${Math.round(color.r*255)},${Math.round(color.g*255)},${Math.round(color.b*255)},0.0)`);
+        ctx.fillStyle = grad3; ctx.beginPath(); ctx.arc(x - width, y, radius, 0, Math.PI * 2); ctx.fill();
+      }
+    });
+
+    currentHeatCanvas = canvas;
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.needsUpdate = true;
+    return tex;
+  }
+
+  function createLocationSprites() {
+    locationSprites.forEach(s => globeGroup.remove(s));
+    locationSprites = [];
+    records.forEach(rec => {
+      const spriteCanvas = document.createElement('canvas');
+      spriteCanvas.width = 64; spriteCanvas.height = 64;
+      const ctx = spriteCanvas.getContext('2d');
+      const metric = metricSelect.value;
+      const system = systemSelect.value;
+      const score = scoreForRecord(rec, metric, system);
+      const color = scoreToColor(score === null ? 0.5 : score);
+      ctx.fillStyle = `rgba(${Math.round(color.r*255)},${Math.round(color.g*255)},${Math.round(color.b*255)},0.95)`;
+      ctx.beginPath(); ctx.arc(32,32,8,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.18)';
+      ctx.beginPath(); ctx.arc(32,32,18,0,Math.PI*2); ctx.fill();
+
+      const tex = new THREE.CanvasTexture(spriteCanvas);
+      const mat = new THREE.SpriteMaterial({ map: tex, transparent:true, depthWrite:false });
+      const sprite = new THREE.Sprite(mat);
+      sprite.scale.set(0.07,0.07,0.07);
+      sprite.position.copy(latLonToVector3(rec.lat, rec.lon, 1.03));
+      sprite.userData.record = rec;
+      locationSprites.push(sprite);
+      globeGroup.add(sprite);
+    });
+  }
+
+  function updateHeatmap() {
+    if (!heatMesh) return;
+    const tex = buildHeatTexture();
+    heatMesh.material.map = tex;
+    heatMesh.material.needsUpdate = true;
+    createLocationSprites();
+    updateKPIs();
+    buildRanking();
+    buildAlerts();
+  }
+
+  async function loadCountries() {
+    const res = await fetch(COUNTRIES_URL);
+    const topo = await res.json();
+    const geo = topojson.feature(topo, topo.objects.countries);
+    const vertices = [];
+    geo.features.forEach(feature => {
+      const coords = feature.geometry.type === 'Polygon' ? [feature.geometry.coordinates] : feature.geometry.coordinates;
+      coords.forEach(poly => {
+        poly.forEach(ring => {
+          ring.forEach(([lon, lat], idx) => {
+            const v = latLonToVector3(lat, lon, 1.005);
+            vertices.push(v.x, v.y, v.z);
+          });
+        });
+      });
+    });
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    const mat = new THREE.PointsMaterial({ color:0x93baff, size:0.006, transparent:true, opacity:0.35 });
+    borderLines = new THREE.Points(geometry, mat);
+    globeGroup.add(borderLines);
+  }
+
+  async function createGlobe() {
+    const loader = new THREE.TextureLoader();
+    const earthTexture = await new Promise((resolve, reject) => loader.load(EARTH_TEXTURE_URL, resolve, undefined, reject));
+    const earthGeom = new THREE.SphereGeometry(1, 96, 96);
+    const earthMat = new THREE.MeshPhongMaterial({ map: earthTexture, shininess: 8 });
+    earth = new THREE.Mesh(earthGeom, earthMat);
+    globeGroup.add(earth);
+
+    const heatGeom = new THREE.SphereGeometry(1.012, 96, 96);
+    const heatMat = new THREE.MeshBasicMaterial({ transparent:true, opacity:0.95, blending:THREE.AdditiveBlending });
+    heatMesh = new THREE.Mesh(heatGeom, heatMat);
+    globeGroup.add(heatMesh);
+
+    const atmosphereGeom = new THREE.SphereGeometry(1.05, 96, 96);
+    const atmosphereMat = new THREE.MeshBasicMaterial({ color:0x68b7ff, transparent:true, opacity:0.08, side:THREE.BackSide });
+    globeGroup.add(new THREE.Mesh(atmosphereGeom, atmosphereMat));
+
+    await loadCountries();
+    updateHeatmap();
+  }
+
+  function findNearestRecordByLatLon(lat, lon) {
+    let best = null;
+    let bestDist = Infinity;
+    records.forEach(rec => {
+      const dLat = (lat - rec.lat);
+      const dLon = Math.min(Math.abs(lon - rec.lon), 360 - Math.abs(lon - rec.lon));
+      const dist = dLat * dLat + dLon * dLon;
+      if (dist < bestDist) { bestDist = dist; best = rec; }
+    });
+    return best;
+  }
+
+  function showDetails(rec) {
+    if (!rec) {
+      detailsBody.innerHTML = 'No nearby public location record found.';
+      return;
+    }
+    const metric = metricSelect.value;
+    const system = systemSelect.value;
+    const overallTrust = Math.round(aggregateLocation(rec, 'trust') * 100);
+    const overallSatisfied = Math.round(aggregateLocation(rec, 'satisfied') * 100);
+
+    const taskAbility = !!rec.can_perform_daily_tasks;
+    let html = `<div class="listItem">
+      <strong>${escapeHtml(rec.location_label || 'Unknown location')}</strong>
+      <div class="tiny" style="margin-top:6px">Public location view only. Names are removed in this live version.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+        <span class="pill">Overall trust ${overallTrust}%</span>
+        <span class="pill">Overall satisfaction ${overallSatisfied}%</span>
+        <span class="pill">${taskAbility ? 'Able to perform daily tasks' : 'Unable to perform daily tasks'}</span>
+        <span class="pill">Coordinates ${rec.lat.toFixed(2)}, ${rec.lon.toFixed(2)}</span>
+      </div>
+      <div class="tiny" style="margin-top:8px">${escapeHtml(rec.daily_task_ability_response || 'No daily-task response')}</div>
+    </div>`;
+
+    if (system === 'all') {
+      html += `<div class="section"><h3>Human system status</h3><div class="list"><div class="listItem">
+        <div style="display:flex;justify-content:space-between;gap:10px"><strong>Daily task ability</strong><span class="${taskAbility ? 'good' : 'bad'}">${taskAbility ? 'Able' : 'Unable'}</span></div>
+        <div class="tiny" style="margin-top:8px">${escapeHtml(rec.daily_task_ability_response || 'No response')}</div>
+      </div></div></div>`;
+      html += `<div class="section"><h3>System snapshot</h3><div class="list">`;
+      systems.forEach(s => {
+        const entry = rec[s];
+        if (!entry || !entry.depends) return;
+        html += `<div class="listItem">
+          <div style="display:flex;justify-content:space-between;gap:10px">
+            <strong>${SYSTEM_LABELS[s]}</strong>
+            <span>${entry[metric] ? 'Yes' : 'No'}</span>
+          </div>
+          <div class="tiny" style="margin-top:6px">Subsystem: ${escapeHtml(entry.subsystem_name || 'Unknown')}</div>
+        </div>`;
+      });
+      html += `</div></div>`;
+    } else {
+      const entry = rec[system];
+      html += `<div class="section"><h3>${SYSTEM_LABELS[system]} detail</h3>`;
+      if (!entry) {
+        html += `<div class="tiny">No data for this system at this location.</div>`;
+      } else {
+        html += `<div class="listItem">
+          <div style="display:flex;justify-content:space-between;gap:10px"><strong>Depends on system</strong><span>${entry.depends ? 'Yes' : 'No'}</span></div>
+          <div style="display:flex;justify-content:space-between;gap:10px;margin-top:6px"><strong>Trust</strong><span class="${entry.trust ? 'good' : 'bad'}">${entry.trust ? 'Yes' : 'No'}</span></div>
+          <div style="display:flex;justify-content:space-between;gap:10px;margin-top:6px"><strong>Satisfaction</strong><span class="${entry.satisfied ? 'good' : 'bad'}">${entry.satisfied ? 'Yes' : 'No'}</span></div>
+          <div class="tiny" style="margin-top:8px">Subsystem: ${escapeHtml(entry.subsystem_name || 'Unknown')}</div>
+        </div>`;
+      }
+      html += `</div>`;
+    }
+    detailsBody.innerHTML = html;
+  }
+
+  function aggregateLocation(rec, metric) {
+    const vals = systems.map(s => rec[s] && rec[s].depends ? (rec[s][metric] ? 1 : 0) : null).filter(v => v !== null);
+    return vals.length ? vals.reduce((a,b)=>a+b,0) / vals.length : 0;
+  }
+
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;', "'":'&#39;'}[c]));
+  }
+
+  function jumpToRecord(rec) {
+    const v = latLonToVector3(rec.lat, rec.lon, 1);
+    targetRotY = Math.atan2(v.z, v.x) + Math.PI / 2;
+    targetRotX = Math.asin(v.y / v.length());
+    targetDistance = 2.05;
+    showDetails(rec);
+  }
+
+  function updateTooltip(clientX, clientY) {
+    const rect = renderer.domElement.getBoundingClientRect();
+    pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+    pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(pointer, camera);
+    const hits = raycaster.intersectObjects(locationSprites, true);
+    if (hits.length) {
+      hoverCandidate = hits[0].object.userData.record;
+      tooltip.style.display = 'block';
+      tooltip.style.left = `${clientX}px`;
+      tooltip.style.top = `${clientY}px`;
+      const hoverScore = scoreForRecord(hoverCandidate, metricSelect.value, systemSelect.value) || 0;
+      tooltip.innerHTML = `${escapeHtml(hoverCandidate.location_label)}<br><span style="color:#9cb2cc">${metricSelect.value === 'task_ability' ? (hoverScore ? 'Able' : 'Unable') : `${Math.round(hoverScore * 100)}%`}</span>`;
+    } else {
+      tooltip.style.display = 'none';
+      hoverCandidate = null;
+    }
+  }
+
+  function handleClick(clientX, clientY) {
+    const rect = renderer.domElement.getBoundingClientRect();
+    pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+    pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(pointer, camera);
+
+    const spriteHits = raycaster.intersectObjects(locationSprites, true);
+    if (spriteHits.length) {
+      showDetails(spriteHits[0].object.userData.record);
+      return;
+    }
+    const sphereHits = earth ? raycaster.intersectObject(earth, true) : [];
+    if (sphereHits.length) {
+      const point = globeGroup.worldToLocal(sphereHits[0].point.clone());
+      const ll = vectorToLatLon(point);
+      showDetails(findNearestRecordByLatLon(ll.lat, ll.lon));
+    }
+  }
+
+  function animate() {
+    requestAnimationFrame(animate);
+    if (autoRotate && !isDragging) targetRotY += 0.0014;
+    rotX += (targetRotX - rotX) * 0.08;
+    rotY += (targetRotY - rotY) * 0.08;
+    distance += (targetDistance - distance) * 0.08;
+    globeGroup.rotation.x = rotX;
+    globeGroup.rotation.y = rotY;
+    camera.position.z = distance;
+    stars.rotation.y += 0.00015;
+    renderer.render(scene, camera);
+  }
+
+  async function loadData() {
+    const mode = getModeFromUrl();
+    let loadedFrom = 'embedded data';
+    let loaded = null;
+
+    if (mode !== 'embedded') {
+      try {
+        const res = await fetch(DATA_URL, { cache:'no-store' });
+        if (!res.ok) throw new Error(`Could not load ${DATA_URL}`);
+        loaded = await res.json();
+        loadedFrom = DATA_URL;
+      } catch (err) {
+        console.warn('Falling back to embedded data:', err);
+      }
+    }
+
+    dataset = loaded || EMBEDDED_DATA;
+    records = (dataset.people || []).filter(r => Number.isFinite(r.lat) && Number.isFinite(r.lon));
+    systems = dataset.systems || [];
+    updateMetaPills();
+    populateControls();
+    const able = records.filter(r => !!r.can_perform_daily_tasks).length;
+    const sourceLabel = loaded ? `live JSON (${loadedFrom})` : 'embedded dummy data';
+    statusText.textContent = `Loaded ${records.length} public responses from ${sourceLabel}. ${able} report they are able to perform daily tasks.`;
+  }
+
+  metricSelect.addEventListener('change', () => {
+    systemSelect.disabled = metricSelect.value === 'task_ability';
+    updateHeatmap();
+  });
+  systemSelect.addEventListener('change', updateHeatmap);
+  motionSelect.addEventListener('change', () => { autoRotate = motionSelect.value === 'on'; });
+  locationSelect.addEventListener('change', () => {
+    if (!locationSelect.value) { targetDistance = 3.2; return; }
+    const rec = records[Number(locationSelect.value)];
+    if (rec) jumpToRecord(rec);
+  });
+
+  let activeTouchId = null;
+  let pinchDistance = null;
+
+  function clampDistance() {
+    targetDistance = Math.max(1.5, Math.min(6.5, targetDistance));
+  }
+
+  function beginDrag(clientX, clientY) {
+    isDragging = true;
+    dragMoved = false;
+    lastX = clientX;
+    lastY = clientY;
+  }
+
+  function endDrag(clientX, clientY) {
+    if (isDragging && !dragMoved) handleClick(clientX, clientY);
+    isDragging = false;
+  }
+
+  function moveDrag(clientX, clientY) {
+    updateTooltip(clientX, clientY);
+    if (!isDragging) return;
+    const dx = clientX - lastX;
+    const dy = clientY - lastY;
+    if (Math.abs(dx) + Math.abs(dy) > 2) dragMoved = true;
+    targetRotY += dx * 0.0055;
+    targetRotX += dy * 0.004;
+    targetRotX = Math.max(-1.3, Math.min(1.3, targetRotX));
+    lastX = clientX;
+    lastY = clientY;
+  }
+
+  renderer.domElement.addEventListener('mousedown', e => {
+    beginDrag(e.clientX, e.clientY);
+  });
+  window.addEventListener('mouseup', e => {
+    endDrag(e.clientX, e.clientY);
+  });
+  window.addEventListener('mousemove', e => {
+    moveDrag(e.clientX, e.clientY);
+  });
+
+  renderer.domElement.addEventListener('touchstart', e => {
+    if (e.touches.length === 1) {
+      const t = e.touches[0];
+      activeTouchId = t.identifier;
+      pinchDistance = null;
+      beginDrag(t.clientX, t.clientY);
+    } else if (e.touches.length === 2) {
+      isDragging = false;
+      const a = e.touches[0], b = e.touches[1];
+      pinchDistance = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+    }
+    e.preventDefault();
+  }, { passive:false });
+
+  renderer.domElement.addEventListener('touchmove', e => {
+    if (e.touches.length === 1) {
+      const t = e.touches[0];
+      moveDrag(t.clientX, t.clientY);
+    } else if (e.touches.length === 2) {
+      const a = e.touches[0], b = e.touches[1];
+      const nextDistance = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+      if (pinchDistance != null) {
+        const delta = pinchDistance - nextDistance;
+        targetDistance += delta * 0.005;
+        clampDistance();
+      }
+      pinchDistance = nextDistance;
+      const midX = (a.clientX + b.clientX) / 2;
+      const midY = (a.clientY + b.clientY) / 2;
+      updateTooltip(midX, midY);
+    }
+    e.preventDefault();
+  }, { passive:false });
+
+  renderer.domElement.addEventListener('touchend', e => {
+    if (e.touches.length === 0) {
+      endDrag(lastX, lastY);
+      pinchDistance = null;
+      activeTouchId = null;
+    } else if (e.touches.length === 1) {
+      const t = e.touches[0];
+      activeTouchId = t.identifier;
+      pinchDistance = null;
+      beginDrag(t.clientX, t.clientY);
+    }
+    e.preventDefault();
+  }, { passive:false });
+
+  renderer.domElement.addEventListener('touchcancel', () => {
+    isDragging = false;
+    pinchDistance = null;
+    activeTouchId = null;
+  });
+
+  renderer.domElement.addEventListener('wheel', e => {
+    e.preventDefault();
+    targetDistance += e.deltaY * 0.0015;
+    clampDistance();
+  }, { passive:false });
+
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  Promise.all([loadData(), createGlobe()]).then(() => {
+    updateHeatmap();
+    animate();
+  }).catch(err => {
+    console.error(err);
+    statusText.textContent = `Failed to start dashboard: ${err.message}`;
+  });
+})();
+</script>
+</body>
+</html>
