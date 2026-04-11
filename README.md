@@ -26,13 +26,13 @@ Any use of this code must comply with the zero strings principles.
 - [ ] Zero cruelty
 - [ ] Zero secrets
 - [ ] Zero money
+- [ ] Zero borders
 - [ ] Zero judgement
 - [ ] Zero blame
 - [ ] Zero shame 
 - [ ] Zero greed
 - [ ] Zero arrogance 
 - [ ] Zero baggage
-- [ ] Zero borders
 - [ ] Zero obligation 
 - [ ] Zero punishment 
 - [ ] Zero regret
