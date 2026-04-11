@@ -36,6 +36,7 @@ Any use of this code must comply with the zero strings principles.
 - [ ] Zero obligation 
 - [ ] Zero punishment 
 - [ ] Zero regret
+- [ ] Zero resentment
 
 ### Level One
 - [ ] Zero conscious will 
