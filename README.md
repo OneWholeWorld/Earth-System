@@ -60,7 +60,7 @@ To ensure all systems in me are thriving.
 ## Story
 
 - A System is an Actor.
-- A Role is a Character. 
+- A Role is a Character.
 - The Goal of a Role is play its Act.
 - To play its best Act, the Role has Needs.
 - The World is the Stage and the production Studio.
