@@ -1,22 +1,17 @@
 # One Whole World Operating System
 
-
 ## Mission
-To measure, monitor and meet the needs of all systems of One Whole World
+To measure, monitor and meet the needs of all systems in One Whole World
 
-## One Whole World
-- A singular system measuring, monitoring and meeting every need of its sub-systems with absolute accuracy and seamless precision.
-
-- A need must be met through the path of least action.
-
-- All systems must be redundant. 
-
-- Every Frame of the life of a system must be recorded.
-
-- Every action of a system must comply with the Zero Strings Principles.
-
-- Wisdom must be learned from the recorded frames of every system.
-
+## Earth System
+- [ ] I need to ensure every system in me gets everything it needs to achieve all its goals. 
+- [ ] I need to measure, monitor and meet the needs of all my sub-systems.
+- [ ] All my sub-systems must collaborate to achieve my goal.
+- [ ] All my sub-systems must be redundant.
+- [ ] I must meet all my goals taking the path of least action.
+- [ ] Every frame of my every action must be recorded.
+- [ ] All my actions must comply with the zero strings principles.
+- [ ] I must create wisdom from all the recorded frames of every sub-system.
 
 
 ## Zero Strings Principles
