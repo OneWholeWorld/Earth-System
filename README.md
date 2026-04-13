@@ -2,7 +2,7 @@
 
 ## Goal
 
-To ensure every system in me is achieving all its goals. 
+To ensure I become a Level One Paragon System. 
 
 ## Needs
 
