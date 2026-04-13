@@ -1,9 +1,11 @@
 # Earth Operating System
 
 ## Goal
+
 To ensure all systems in me are thriving. 
 
 ## Needs
+
 - [ ] I need to ensure every sub-system in me gets everything it needs to achieve all its goals.
 - [ ] I need to ensure every sub-system does not get what it does not need to achieve its goals.
 - [ ] I need to ensure every sub-system only gets exactly what it needs, nothing less and nothing more, to achieve its goals. 
@@ -17,12 +19,14 @@ To ensure all systems in me are thriving.
 
 
 ## Terms Of Use
+
 - [ ]  Any use of this code must comply with the zero strings principles.
 - [ ]  Any changes made must not be kept secert and must be submitted back to the Earth System.
 
 ## Zero Strings Principles
 
 ### Level Zero
+
 - [ ] Zero cruelty
 - [ ] Zero secrets
 - [ ] Zero money
@@ -39,10 +43,12 @@ To ensure all systems in me are thriving.
 - [ ] Zero resentment
 
 ### Level One
+
 - [ ] Zero conscious will
 - [ ] Zero ego
 
 ## System
+
 - Any bundle of information is a System.
 - A bundle of information that answers zero questions is also a system.
 - Every system plays one or many Roles.
@@ -53,6 +59,7 @@ To ensure all systems in me are thriving.
 - The Goal of a Role is to meet a Need taking the path of least action.
 
 ## Story
+
 - A System is an Actor.
 - A Role is a Character. 
 - The Goal of a Role is play its Act.
