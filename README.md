@@ -54,6 +54,7 @@ Any use of this code must comply with the zero strings principles.
 - To play its best Act, the Role has Needs. 
 - The World is the Stage and the production Studio. 
 - The Goal of the World is to provide every Actor everything it Needs to play its best Act for every Role it plays.
+- The recording of every Act of every Role is its Story. 
 
 Affectionately yours,
 
