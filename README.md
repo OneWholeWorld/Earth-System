@@ -17,7 +17,7 @@ To ensure all systems in me are thriving.
 
 
 ## Zero Strings Principles
-Any use of this code must comply with the zero strings principles.
+Any use of this code shall comply with the zero strings principles.
 
 ### Level Zero
 - [ ] Zero cruelty
