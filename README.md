@@ -2,7 +2,7 @@
 
 ## Goal
 
-To ensure Earth becomes and maitains a Level One Paragon System. 
+To elevate Earth to and maitain a Level One Paragon System. 
 
 ## Needs
 
