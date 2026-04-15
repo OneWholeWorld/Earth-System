@@ -1,9 +1,8 @@
 # Earth Operating System
-
-- One Whole World = Movie Studio
-- Earth = Stage
-- Life = Actors
-- Environment = Set
+- Earth is the Stage.
+- Environment is the Set.
+- Life are the Actors.
+- Live History are the Stories.
 
 ## Mission
 
