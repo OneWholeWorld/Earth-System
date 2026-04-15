@@ -1,8 +1,9 @@
 # Earth Operating System
+
 - Earth is the Stage.
 - Environment is the Set.
 - Life are the Actors.
-- Live History are the Stories.
+- Live History are their Stories.
 
 ## Mission
 
@@ -71,6 +72,29 @@ Elevate Earth to a Level One Paragon System and maintain it there.
 - The Goal of the World is to provide every Actor everything it Needs to play its best Act for every Role it plays.
 - The recording of every Act of every Role is its Story.
 
+## Systems
+
+animal/
+  bird/
+    chicken/
+    duck/
+  mammal/
+    cat/
+    dog/
+    human/
+    sheep/
+    buffalo/
+    donkey/
+    goat/
+    pig/
+    camel/
+    cow/
+    horse/
+    rabbit/
+  fish/
+    fish/
+  reptile/
+    snake/
 Affectionately yours,
 
 Zero x One Whole World
