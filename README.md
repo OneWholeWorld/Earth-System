@@ -7,7 +7,7 @@
 
 ## Mission
 
-Elevate Earth to a Level One Paragon System and maintain it there.  
+Elevate Earth to a Paragon System and maintain it there.  
 
 ## Needs
 
