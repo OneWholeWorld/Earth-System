@@ -94,6 +94,47 @@ canvas{display:block}
 #focusEnergyBtn{background:rgba(212,175,55,.85);color:#111827}
 #elevateBtn{background:rgba(99,102,241,.85)}
 
+
+/* Health filter panel mode */
+body.health-panel-mode #satisfiedBtn,
+body.health-panel-mode #notSatisfiedBtn,
+body.health-panel-mode #focusEnergyBtn,
+body.health-panel-mode #elevateBtn{
+  display:none !important;
+}
+body:not(.health-panel-mode) #healthPositiveBtn,
+body:not(.health-panel-mode) #healthNegativeBtn{
+  display:none !important;
+}
+
+#healthPositiveBtn,
+#healthNegativeBtn{
+  width:100%;
+  border-radius:10px;
+  padding:10px 12px;
+  cursor:pointer;
+  font-weight:600;
+  background:rgba(255,255,255,.06);
+}
+#healthPositiveBtn{
+  color:#9df0b5;
+  border:2px solid rgba(22,163,74,.9);
+}
+#healthPositiveBtn.active{
+  background:#16a34a;
+  color:#ffffff;
+  border-color:#16a34a;
+}
+#healthNegativeBtn{
+  color:#ff9e9e;
+  border:2px solid rgba(220,38,38,.9);
+}
+#healthNegativeBtn.active{
+  background:#dc2626;
+  color:#ffffff;
+  border-color:#dc2626;
+}
+
 </style>
 </head>
 <body>
@@ -112,6 +153,8 @@ canvas{display:block}
     <button id="notSatisfiedBtn">Not Satisfied</button>
     <button id="focusEnergyBtn">Focus Energy</button>
     <button id="elevateBtn">Ascend</button>
+    <button id="healthPositiveBtn">Show Only Positive</button>
+    <button id="healthNegativeBtn">Show Only Negative</button>
   </div>
 </div>
 
@@ -157,6 +200,8 @@ const elevateBtn = document.getElementById('elevateBtn');
 const closeInspectBtn = document.getElementById('closeInspectBtn');
 const showConnectionsBtn = document.getElementById('showConnectionsBtn');
 const showHealthBtn = document.getElementById('showHealthBtn');
+const healthPositiveBtn = document.getElementById('healthPositiveBtn');
+const healthNegativeBtn = document.getElementById('healthNegativeBtn');
 
 const COLORS = {
   defaultDome: 0x6fbaff,
@@ -171,6 +216,8 @@ let systemSelected = false;
 let selectedSystem = null;
 let connectionsMode = false;
 let healthMode = false;
+let healthOnlyPositive = false;
+let healthOnlyNegative = false;
 let elevatedMode = false;
 let elevateBlend = 0.0;
 let elevateTransitionActive = false;
@@ -229,6 +276,24 @@ function startFormationRetarget(newFocusSystem) {
   formationRetargetBlend = 0.0;
 }
 
+
+function enterHealthPanelMode() {
+  document.body.classList.add('health-panel-mode');
+  inspectTitle.textContent = 'Health Filters';
+  inspectSubtitle.textContent = 'Filter positive and negative responses.';
+  updateHealthFilterButtons();
+  inspectPanel.classList.add('visible');
+}
+
+function exitHealthPanelMode() {
+  document.body.classList.remove('health-panel-mode');
+}
+
+function updateHealthFilterButtons() {
+  healthPositiveBtn.classList.toggle('active', healthOnlyPositive);
+  healthNegativeBtn.classList.toggle('active', healthOnlyNegative);
+}
+
 // UI Logic
 showConnectionsBtn.addEventListener('click', () => {
   connectionsMode = !connectionsMode;
@@ -246,6 +311,10 @@ showHealthBtn.addEventListener('click', () => {
   healthMode = !healthMode;
   if (healthMode) {
     resetElevation();
+    selectedSystem = null;
+    systemSelected = false;
+    enterHealthPanelMode();
+  } else {
     closeInspectPanel();
   }
   showHealthBtn.classList.toggle('active', healthMode);
@@ -571,16 +640,18 @@ function rebuildHealthPillars(data) {
     const quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
 
     if (greenHeight > 0.0005) {
-      const greenGeom = new THREE.CylinderGeometry(radius, radius, greenHeight, 64, 1, false);
+      const greenGeom = new THREE.CylinderGeometry(radius, radius, greenHeight, 10, 1, false);
       const greenMesh = new THREE.Mesh(greenGeom, healthPillarMaterials.green);
+      greenMesh.userData.segmentType = 'positive';
       greenMesh.quaternion.copy(quat);
       greenMesh.position.copy(base.clone().add(normal.clone().multiplyScalar(greenHeight * 0.5)));
       healthPillarsGroup.add(greenMesh);
     }
 
     if (redHeight > 0.0005) {
-      const redGeom = new THREE.CylinderGeometry(radius, radius, redHeight, 64, 1, false);
+      const redGeom = new THREE.CylinderGeometry(radius, radius, redHeight, 10, 1, false);
       const redMesh = new THREE.Mesh(redGeom, healthPillarMaterials.red);
+      redMesh.userData.segmentType = 'negative';
       redMesh.quaternion.copy(quat);
       redMesh.position.copy(base.clone().add(normal.clone().multiplyScalar(greenHeight + redHeight * 0.5)));
       healthPillarsGroup.add(redMesh);
@@ -707,6 +778,7 @@ function applySystemColors(system) {
 function openInspectPanel(system) {
   selectedSystem = system;
   systemSelected = true;
+  exitHealthPanelMode();
   inspectTitle.textContent = system.name;
   inspectSubtitle.textContent = 'Set the system state.';
   syncElevateButton();
@@ -716,6 +788,7 @@ function openInspectPanel(system) {
 function closeInspectPanel() {
   selectedSystem = null;
   systemSelected = false;
+  exitHealthPanelMode();
   inspectPanel.classList.remove('visible');
 }
 
@@ -936,6 +1009,25 @@ elevateBtn.addEventListener('click', () => {
   syncElevateButton();
 });
 closeInspectBtn.addEventListener('click', closeInspectPanel);
+healthPositiveBtn.addEventListener('click', () => {
+  if (healthOnlyPositive) {
+    healthOnlyPositive = false;
+  } else {
+    healthOnlyPositive = true;
+    healthOnlyNegative = false;
+  }
+  updateHealthFilterButtons();
+});
+
+healthNegativeBtn.addEventListener('click', () => {
+  if (healthOnlyNegative) {
+    healthOnlyNegative = false;
+  } else {
+    healthOnlyNegative = true;
+    healthOnlyPositive = false;
+  }
+  updateHealthFilterButtons();
+});
 
 // ===== LOCATION =====
 const lat = 15.5588;
@@ -1094,6 +1186,17 @@ function animate() {
   auroraMaterial.uniforms.uMode.value = nightMaterial.uniforms.uMode.value;
 
   healthPillarsGroup.visible = healthMode;
+  if (healthMode) {
+    for (const child of healthPillarsGroup.children) {
+      if (healthOnlyPositive) {
+        child.visible = child.userData.segmentType === 'positive';
+      } else if (healthOnlyNegative) {
+        child.visible = child.userData.segmentType === 'negative';
+      } else {
+        child.visible = true;
+      }
+    }
+  }
 
   const elevateBlendRate = elevatedMode ? 0.01 : 0.005;
   elevateBlend += ((elevatedMode ? 1.0 : 0.0) - elevateBlend) * elevateBlendRate;
