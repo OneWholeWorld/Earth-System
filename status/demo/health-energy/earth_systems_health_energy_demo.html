@@ -379,7 +379,7 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.05;
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.006, 1000);
 
 // ===== CAMERA ORBIT =====
 const orbit = {
@@ -387,6 +387,19 @@ const orbit = {
   theta: 0,
   phi: 0.22
 };
+
+// Close-up exploration.
+// Lower minimum radius lets raw city columns separate visually when zooming in.
+const ORBIT_MIN_RADIUS = 1.07;
+const ORBIT_MAX_RADIUS = 5.0;
+const ORBIT_ZOOM_SPEED = 0.00065;
+
+// Close zoom city-footprint mode.
+// At very close zoom, tall columns flatten into short selectable discs.
+const DISC_MODE_START_RADIUS = 1.32;
+const DISC_MODE_FULL_RADIUS = 1.12;
+const DISC_HEIGHT_FACTOR = 0.055;
+const DISC_RADIUS_FACTOR = 1.55;
 
 function updateCamera() {
   const r = orbit.radius;
@@ -923,6 +936,16 @@ const tmpScale = new THREE.Vector3();
 
 function clamp01(v) {
   return Math.max(0, Math.min(1, v));
+}
+
+function smoothstep(edge0, edge1, x) {
+  const t = clamp01((x - edge0) / (edge1 - edge0));
+  return t * t * (3.0 - 2.0 * t);
+}
+
+function closeZoomDiscBlend() {
+  // 0 = full column height, 1 = flattened footprint disc.
+  return 1.0 - smoothstep(DISC_MODE_FULL_RADIUS, DISC_MODE_START_RADIUS, orbit.radius);
 }
 
 function clusteredGreenShare(lat, lng) {
@@ -1763,6 +1786,8 @@ function setInstance(mesh, instanceId, meta, centerPos, height, radius, color) {
   meta.topPosition = centerPos.clone().add(normal.clone().multiplyScalar(height * 0.5));
   meta.segmentHeight = height;
   meta.segmentRadius = radius;
+  meta.originalSegmentHeight = height;
+  meta.originalSegmentRadius = radius;
   meta.segmentNormal = normal.clone();
   meta.segmentBasePosition = centerPos.clone().add(normal.clone().multiplyScalar(-height * 0.5));
 }
@@ -1782,6 +1807,47 @@ function setAnimatedInstanceHeight(mesh, instanceId, meta, heightScale) {
 
   meta.centerPosition = center.clone();
   meta.topPosition = center.clone().add(normal.clone().multiplyScalar(height * 0.5));
+}
+
+
+function setInstanceShape(mesh, instanceId, meta, height, radius) {
+  const normal = meta.segmentNormal;
+  const safeHeight = Math.max(0.000001, height);
+  const center = meta.segmentBasePosition.clone().add(normal.clone().multiplyScalar(safeHeight * 0.5));
+
+  tmpQuat.setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
+  tmpScale.set(radius, safeHeight, radius);
+  tmpMatrix.compose(center, tmpQuat, tmpScale);
+  mesh.setMatrixAt(instanceId, tmpMatrix);
+
+  meta.centerPosition = center.clone();
+  meta.topPosition = center.clone().add(normal.clone().multiplyScalar(safeHeight * 0.5));
+}
+
+function applyCloseZoomDiscMode() {
+  if (!healthMode || healthTransitionActive) return;
+
+  const blend = closeZoomDiscBlend();
+  const sources = [greenInstances, redInstances].filter(Boolean);
+
+  for (const mesh of sources) {
+    const metas = mesh.userData.metas || [];
+    for (let i = 0; i < metas.length; i++) {
+      const meta = metas[i];
+      const originalHeight = meta.originalSegmentHeight || meta.segmentHeight;
+      const originalRadius = meta.originalSegmentRadius || meta.segmentRadius;
+
+      const discHeight = Math.max(0.0016, originalHeight * DISC_HEIGHT_FACTOR);
+      const discRadius = originalRadius * DISC_RADIUS_FACTOR;
+
+      const height = originalHeight * (1 - blend) + discHeight * blend;
+      const radius = originalRadius * (1 - blend) + discRadius * blend;
+
+      setInstanceShape(mesh, i, meta, height, radius);
+    }
+
+    mesh.instanceMatrix.needsUpdate = true;
+  }
 }
 
 function disposeHealthInstances() {
@@ -2240,6 +2306,7 @@ function applyLoadedHealthDataset(data) {
 
   fullPopulationMaxPop = Math.max(...fullPopulationDataset.map(d => d.pop));
   console.log(`✅ Active health dataset: ${fullPopulationDataset[0]?.source || 'unknown'} | ${fullPopulationDataset.length.toLocaleString()} columns`);
+  console.log(`✅ Deep zoom enabled: orbit radius ${ORBIT_MIN_RADIUS}–${ORBIT_MAX_RADIUS}. Use raw cities + close zoom to separate columns. Close zoom disc mode enabled.`);
   updatePillarHeightPercentileFilter();
 }
 
@@ -2989,7 +3056,7 @@ canvas.addEventListener('pointerup', (e) => {
 });
 canvas.addEventListener('pointerleave', () => { dragging = false; hideCityHoverFlag(); });
 canvas.addEventListener('wheel', (e) => {
-  e.preventDefault(); orbit.radius += e.deltaY * 0.001; orbit.radius = Math.max(1.6, Math.min(5, orbit.radius)); updateCamera();
+  e.preventDefault(); orbit.radius += e.deltaY * ORBIT_ZOOM_SPEED; orbit.radius = Math.max(ORBIT_MIN_RADIUS, Math.min(ORBIT_MAX_RADIUS, orbit.radius)); updateCamera(); applyCloseZoomDiscMode();
 }, { passive: false });
 
 window.addEventListener('resize', () => {
@@ -3041,7 +3108,10 @@ function animate() {
   auroraMaterial.uniforms.uMode.value = nightMaterial.uniforms.uMode.value;
 
   updateHealthPillarVisibility();
-  if (healthMode) updateHealthColumnTransition();
+  if (healthMode) {
+    updateHealthColumnTransition();
+    applyCloseZoomDiscMode();
+  }
   if (!healthMode) {
     if (pillarRing) pillarRing.visible = false;
     if (tooltip) tooltip.style.display = 'none';
