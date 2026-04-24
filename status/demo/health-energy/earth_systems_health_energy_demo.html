@@ -1,0 +1,2866 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>globe.take75 — Expanded Synchronized Pulses & Health Heatmap</title>
+<style>
+html,body{margin:0;overflow:hidden;background:black}
+canvas{display:block}
+#hud{
+  position:fixed;left:16px;top:16px;z-index:10;
+  padding:10px 12px;border-radius:12px;
+  background:rgba(8,12,24,.55);backdrop-filter:blur(10px);
+  color:#eef4ff;font:12px/1.4 Inter,system-ui,sans-serif;
+  border:1px solid rgba(255,255,255,.12);
+  min-width: 180px;
+}
+#showConnectionsBtn, #showHealthBtn{
+  display:block;
+  margin-top:10px;
+  width:100%;
+  border:none;
+  border-radius:10px;
+  padding:9px 10px;
+  cursor:pointer;
+  color:white;
+  font:600 12px/1.2 Inter,system-ui,sans-serif;
+  background:rgba(255,255,255,.12);
+  transition: all 0.2s ease;
+}
+#showConnectionsBtn:hover, #showHealthBtn:hover {
+  background:rgba(255,255,255,.2);
+}
+#showConnectionsBtn.active{
+  background:rgba(212,175,55,.85);
+  color:#111827;
+}
+#showHealthBtn.active{
+  background:rgba(220, 38, 38, 0.85); 
+  color:#ffffff;
+}
+
+#inspectPanel{
+  position:fixed;
+  top:16px;
+  right:16px;
+  width:280px;
+  z-index:20;
+  padding:14px 16px;
+  border-radius:16px;
+  background:rgba(8,12,24,.72);
+  backdrop-filter:blur(12px);
+  border:1px solid rgba(255,255,255,.12);
+  color:#eef4ff;
+  font:13px/1.4 Inter,system-ui,sans-serif;
+  display:none;
+}
+#inspectPanel.visible{display:block}
+#inspectPanel h3{
+  margin:0 28px 6px 0;
+  font-size:16px;
+}
+#inspectPanel p{
+  margin:0 0 12px 0;
+  color:#bcd0f5;
+  font-size:12px;
+}
+#closeInspectBtn{
+  position:absolute;
+  top:10px;
+  right:10px;
+  width:28px;
+  height:28px;
+  border:none;
+  border-radius:999px;
+  background:rgba(255,255,255,.12);
+  color:#eef4ff;
+  cursor:pointer;
+  font:600 16px/1 Inter,system-ui,sans-serif;
+}
+#closeInspectBtn:hover{background:rgba(255,255,255,.2)}
+.inspectBtns{display:flex;flex-direction:column;gap:8px}
+.inspectBtns button{
+  width:100%;
+  border:none;
+  border-radius:10px;
+  padding:10px 12px;
+  cursor:pointer;
+  color:white;
+  font-weight:600;
+}
+#satisfiedBtn{background:#16a34a}
+#notSatisfiedBtn{background:#dc2626}
+#focusEnergyBtn{background:rgba(212,175,55,.85);color:#111827}
+#elevateBtn{background:rgba(99,102,241,.85)}
+
+
+/* Health filter panel mode */
+body.health-panel-mode #satisfiedBtn,
+body.health-panel-mode #notSatisfiedBtn,
+body.health-panel-mode #focusEnergyBtn,
+body.health-panel-mode #elevateBtn{
+  display:none !important;
+}
+body:not(.health-panel-mode) #healthPositiveBtn,
+body:not(.health-panel-mode) #healthNegativeBtn{
+  display:none !important;
+}
+
+#healthPositiveBtn,
+#healthNegativeBtn{
+  width:100%;
+  border-radius:10px;
+  padding:10px 12px;
+  cursor:pointer;
+  font-weight:600;
+  background:rgba(255,255,255,.06);
+}
+#healthPositiveBtn{
+  color:#9df0b5;
+  border:2px solid rgba(22,163,74,.9);
+}
+#healthPositiveBtn.active{
+  background:#16a34a;
+  color:#ffffff;
+  border-color:#16a34a;
+}
+#healthNegativeBtn{
+  color:#ff9e9e;
+  border:2px solid rgba(220,38,38,.9);
+}
+#healthNegativeBtn.active{
+  background:#dc2626;
+  color:#ffffff;
+  border-color:#dc2626;
+}
+
+/* Pillar height percentile range control */
+body:not(.health-panel-mode) #pillarHeightRangeControl{
+  display:none !important;
+}
+
+#pillarHeightRangeControl{
+  margin-top:10px;
+  padding:12px;
+  border-radius:12px;
+  background:rgba(255,255,255,.045);
+  border:1px solid rgba(255,255,255,.08);
+}
+
+#pillarHeightRangeTitle{
+  font-size:11px;
+  color:#bcd0f5;
+  margin-bottom:8px;
+}
+
+#pillarHeightRangeReadout{
+  font-size:11px;
+  color:#eef4ff;
+  margin-top:8px;
+}
+
+#pillarHeightRangeCount{
+  font-size:10px;
+  color:#9fb3d9;
+  margin-top:3px;
+}
+
+#pillarHeightSliderWrap{
+  position:relative;
+  height:28px;
+}
+
+#pillarHeightSliderTrack{
+  position:absolute;
+  left:0;
+  right:0;
+  top:13px;
+  height:4px;
+  border-radius:999px;
+  background:rgba(255,255,255,.16);
+  overflow:hidden;
+}
+
+#pillarHeightSliderFill{
+  position:absolute;
+  top:0;
+  height:100%;
+  border-radius:999px;
+  background:linear-gradient(90deg, rgba(250,204,21,.95), rgba(255,255,255,.82));
+}
+
+.pillarHeightRangeInput{
+  position:absolute;
+  left:0;
+  top:4px;
+  width:100%;
+  margin:0;
+  appearance:none;
+  -webkit-appearance:none;
+  background:transparent;
+  pointer-events:none;
+}
+
+.pillarHeightRangeInput::-webkit-slider-thumb{
+  appearance:none;
+  -webkit-appearance:none;
+  pointer-events:auto;
+  width:16px;
+  height:16px;
+  border-radius:50%;
+  background:#facc15;
+  border:2px solid rgba(8,12,24,.92);
+  box-shadow:0 0 0 2px rgba(250,204,21,.25), 0 4px 12px rgba(0,0,0,.35);
+  cursor:pointer;
+}
+
+.pillarHeightRangeInput::-moz-range-thumb{
+  pointer-events:auto;
+  width:16px;
+  height:16px;
+  border-radius:50%;
+  background:#facc15;
+  border:2px solid rgba(8,12,24,.92);
+  box-shadow:0 0 0 2px rgba(250,204,21,.25), 0 4px 12px rgba(0,0,0,.35);
+  cursor:pointer;
+}
+
+.pillarHeightRangeInput::-webkit-slider-runnable-track{
+  background:transparent;
+}
+
+.pillarHeightRangeInput::-moz-range-track{
+  background:transparent;
+}
+
+#openFiltersBtn{
+  position:fixed;
+  top:16px;
+  right:16px;
+  z-index:19;
+  width:42px;
+  height:42px;
+  border:none;
+  border-radius:999px;
+  background:rgba(8,12,24,.72);
+  backdrop-filter:blur(12px);
+  border:1px solid rgba(255,255,255,.14);
+  color:#eef4ff;
+  cursor:pointer;
+  font:700 18px/1 Inter,system-ui,sans-serif;
+  display:none;
+  box-shadow:0 12px 34px rgba(0,0,0,.30);
+}
+#openFiltersBtn:hover{
+  background:rgba(255,255,255,.14);
+}
+body.health-panel-mode #openFiltersBtn.visible{
+  display:block;
+}
+
+.pillarTooltipClose{
+  position:absolute;
+  top:7px;
+  right:8px;
+  width:22px;
+  height:22px;
+  border:none;
+  border-radius:999px;
+  background:rgba(255,255,255,.10);
+  color:#eef4ff;
+  cursor:pointer;
+  font:700 14px/1 Inter,system-ui,sans-serif;
+  pointer-events:auto;
+}
+.pillarTooltipClose:hover{
+  background:rgba(255,255,255,.20);
+}
+
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">
+  <button id="showConnectionsBtn">Show Energy</button>
+  <button id="showHealthBtn">Show Health</button>
+</div>
+
+<div id="inspectPanel">
+  <button id="closeInspectBtn" aria-label="Close">×</button>
+  <h3 id="inspectTitle">Inspect System</h3>
+  <p id="inspectSubtitle">Set the system state.</p>
+  <div class="inspectBtns">
+    <button id="satisfiedBtn">Satisfied</button>
+    <button id="notSatisfiedBtn">Not Satisfied</button>
+    <button id="focusEnergyBtn">Focus Energy</button>
+    <button id="elevateBtn">Ascend</button>
+    <button id="healthPositiveBtn">Show Only Positive</button>
+    <button id="healthNegativeBtn">Show Only Negative</button>
+    <div id="pillarHeightRangeControl">
+      <div id="pillarHeightRangeTitle">Column Height Range</div>
+      <div id="pillarHeightSliderWrap">
+        <div id="pillarHeightSliderTrack">
+          <div id="pillarHeightSliderFill"></div>
+        </div>
+        <input id="pillarHeightRangeMin" class="pillarHeightRangeInput" type="range" min="0" max="100" value="0" step="1">
+        <input id="pillarHeightRangeMax" class="pillarHeightRangeInput" type="range" min="0" max="100" value="100" step="1">
+      </div>
+      <div id="pillarHeightRangeReadout">Showing 0th – 100th percentile height</div>
+      <div id="pillarHeightRangeCount">All columns</div>
+    </div>
+  </div>
+</div>
+<button id="openFiltersBtn" title="Open filters" aria-label="Open filters">☰</button>
+
+<script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+
+<div id="pillarTooltip" style="
+position:fixed;
+pointer-events:auto;
+background:rgba(8,12,24,.92);
+border:1px solid rgba(255,255,255,.15);
+border-radius:16px;
+padding:14px 16px;
+color:#eef4ff;
+font:12px Inter, system-ui, sans-serif;
+display:none;
+z-index:50;
+min-width:220px;
+box-shadow:0 18px 44px rgba(0,0,0,.38);
+backdrop-filter:blur(12px);
+"></div>
+
+<script>
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+// ===== CAMERA ORBIT =====
+const orbit = {
+  radius: 3.1,
+  theta: 0,
+  phi: 0.22
+};
+
+function updateCamera() {
+  const r = orbit.radius;
+  const cp = Math.cos(orbit.phi);
+  camera.position.set(
+    Math.sin(orbit.theta) * cp * r,
+    Math.sin(orbit.phi) * r,
+    Math.cos(orbit.theta) * cp * r
+  );
+  camera.lookAt(0, 0, 0);
+}
+updateCamera();
+
+const inspectPanel = document.getElementById('inspectPanel');
+const inspectTitle = document.getElementById('inspectTitle');
+const inspectSubtitle = document.getElementById('inspectSubtitle');
+const satisfiedBtn = document.getElementById('satisfiedBtn');
+const notSatisfiedBtn = document.getElementById('notSatisfiedBtn');
+const focusEnergyBtn = document.getElementById('focusEnergyBtn');
+const elevateBtn = document.getElementById('elevateBtn');
+const closeInspectBtn = document.getElementById('closeInspectBtn');
+const showConnectionsBtn = document.getElementById('showConnectionsBtn');
+const showHealthBtn = document.getElementById('showHealthBtn');
+const healthPositiveBtn = document.getElementById('healthPositiveBtn');
+const healthNegativeBtn = document.getElementById('healthNegativeBtn');
+const openFiltersBtn = document.getElementById('openFiltersBtn');
+const pillarHeightRangeMin = document.getElementById('pillarHeightRangeMin');
+const pillarHeightRangeMax = document.getElementById('pillarHeightRangeMax');
+const pillarHeightSliderFill = document.getElementById('pillarHeightSliderFill');
+const pillarHeightRangeReadout = document.getElementById('pillarHeightRangeReadout');
+const pillarHeightRangeCount = document.getElementById('pillarHeightRangeCount');
+
+const COLORS = {
+  defaultDome: 0x6fbaff,
+  defaultGlow: 0x4da6ff,
+  defaultRing: 0x4da6ff,
+  defaultPulse: 0xffd700,
+  selectedRing: 0xffd700,
+  satisfied: 0x16a34a,
+  notSatisfied: 0xdc2626
+};
+
+let systemSelected = false;
+let selectedSystem = null;
+let connectionsMode = false;
+let healthMode = false;
+let healthOnlyPositive = false;
+let healthOnlyNegative = false;
+let pillarHeightPercentMin = 0;
+let pillarHeightPercentMax = 100;
+let fullPopulationDataset = [];
+let fullPopulationMaxPop = 0;
+let elevatedMode = false;
+let elevateBlend = 0.0;
+let elevateTransitionActive = false;
+let autoPanDelay = 0.0;
+let descendCameraRadius = orbit.radius;
+let formationRetargetActive = false;
+let formationRetargetBlend = 1.0;
+const formationRetargetStarts = new Map();
+
+function resetElevation() {
+  elevatedMode = false;
+  elevateTransitionActive = true;
+  autoPanDelay = 0.0;
+  descendCameraRadius = orbit.radius;
+  formationRetargetActive = false;
+  formationRetargetBlend = 1.0;
+  formationRetargetStarts.clear();
+  elevateBtn.textContent = 'Ascend';
+}
+
+function lerpAngle(current, target, amt) {
+  let delta = target - current;
+  while (delta > Math.PI) delta -= Math.PI * 2.0;
+  while (delta < -Math.PI) delta += Math.PI * 2.0;
+  return current + delta * amt;
+}
+
+function syncElevateButton() {
+  elevateBtn.textContent = elevatedMode ? 'Descend' : 'Ascend';
+}
+
+function enableConnectionsMode() {
+  if (healthMode) {
+    healthMode = false;
+    showHealthBtn.classList.remove('active');
+    showHealthBtn.textContent = 'Show Health';
+  }
+  connectionsMode = true;
+  showConnectionsBtn.classList.add('active');
+  showConnectionsBtn.textContent = 'Hide Energy';
+  showHealthBtn.style.display = 'none';
+  syncElevateButton();
+}
+
+function startFormationRetarget(newFocusSystem) {
+  formationRetargetStarts.clear();
+  clickableSystems.forEach(system => {
+    formationRetargetStarts.set(system, {
+      position: (system.currentPosition || system.g.position).clone(),
+      anchor: (system.currentAnchor || system.earthAnchor || new THREE.Vector3()).clone(),
+      outward: (system.currentOutward || system.surfaceNormal || new THREE.Vector3(0, 1, 0)).clone()
+    });
+  });
+  focusedSystem = newFocusSystem;
+  formationRetargetActive = true;
+  formationRetargetBlend = 0.0;
+}
+
+
+function enterHealthPanelMode() {
+  document.body.classList.add('health-panel-mode');
+  inspectTitle.textContent = 'Health Filters';
+  inspectSubtitle.textContent = 'Filter positive, negative, and pillar height.';
+  updateHealthFilterButtons();
+  inspectPanel.classList.add('visible');
+  if (openFiltersBtn) openFiltersBtn.classList.remove('visible');
+}
+
+function exitHealthPanelMode() {
+  document.body.classList.remove('health-panel-mode');
+  if (openFiltersBtn) openFiltersBtn.classList.remove('visible');
+}
+
+function updateHealthFilterButtons() {
+  healthPositiveBtn.classList.toggle('active', healthOnlyPositive);
+  healthNegativeBtn.classList.toggle('active', healthOnlyNegative);
+}
+
+// UI Logic
+showConnectionsBtn.addEventListener('click', () => {
+  connectionsMode = !connectionsMode;
+  if (!connectionsMode) resetElevation();
+  showConnectionsBtn.classList.toggle('active', connectionsMode);
+  showConnectionsBtn.textContent = connectionsMode ? 'Hide Energy' : 'Show Energy';
+  showHealthBtn.style.display = connectionsMode ? 'none' : 'block';
+  if (connectionsMode && typeof focusedSystem !== 'undefined' && focusedSystem) {
+    openInspectPanel(focusedSystem);
+  }
+  syncElevateButton();
+});
+
+showHealthBtn.addEventListener('click', () => {
+  healthMode = !healthMode;
+  if (healthMode) {
+    resetElevation();
+    selectedSystem = null;
+    systemSelected = false;
+    clearSelection();
+    enterHealthPanelMode();
+  } else {
+    clearSelection();
+    closeInspectPanel();
+  }
+  showHealthBtn.classList.toggle('active', healthMode);
+  showHealthBtn.textContent = healthMode ? 'Hide Health' : 'Show Health';
+  showConnectionsBtn.style.display = healthMode ? 'none' : 'block';
+  updateHealthPillarVisibility();
+  syncElevateButton();
+});
+
+// ===== STARS (Depth Colored) =====
+const starsGeom = new THREE.BufferGeometry();
+const starCount = 4000;
+const starPositions = new Float32Array(starCount * 3);
+const starColors = new Float32Array(starCount * 3);
+
+const minRadius = 35;
+const maxRadius = 85;
+
+for (let i = 0; i < starCount; i++) {
+  const radius = minRadius + Math.random() * (maxRadius - minRadius);
+  const theta = Math.random() * Math.PI * 2;
+  const phi = Math.acos(2 * Math.random() - 1);
+  
+  starPositions[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
+  starPositions[i * 3 + 1] = radius * Math.cos(phi);
+  starPositions[i * 3 + 2] = radius * Math.sin(phi) * Math.sin(theta);
+
+  const depthStr = 1.0 - ((radius - minRadius) / (maxRadius - minRadius));
+  const intensity = 0.15 + 0.85 * Math.pow(depthStr, 2.5);
+
+  starColors[i * 3] = 0.85 * intensity + 0.15 * depthStr;
+  starColors[i * 3 + 1] = 0.90 * intensity + 0.10 * depthStr;
+  starColors[i * 3 + 2] = 1.00 * intensity;
+}
+starsGeom.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+starsGeom.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
+
+const stars = new THREE.Points(
+  starsGeom,
+  new THREE.PointsMaterial({
+    size: 0.22,
+    vertexColors: true,
+    transparent: true,
+    opacity: 1.0,
+    sizeAttenuation: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false
+  })
+);
+scene.add(stars);
+
+// ===== MILKY WAY =====
+const milkyWayGroup = new THREE.Group();
+
+const mwSphereGeo = new THREE.SphereGeometry(300, 64, 64);
+const mwSphereMat = new THREE.ShaderMaterial({
+  vertexShader: `
+    varying vec3 vPos;
+    void main() {
+      vPos = position;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    varying vec3 vPos;
+    float hash(vec3 p) {
+      p = fract(p * 0.3183099 + .1); p *= 17.0;
+      return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+    }
+    float noise(vec3 x) {
+      vec3 i = floor(x); vec3 f = fract(x); f = f * f * (3.0 - 2.0 * f);
+      return mix(mix(mix(hash(i+vec3(0,0,0)), hash(i+vec3(1,0,0)), f.x), mix(hash(i+vec3(0,1,0)), hash(i+vec3(1,1,0)), f.x), f.y),
+                 mix(mix(hash(i+vec3(0,0,1)), hash(i+vec3(1,0,1)), f.x), mix(hash(i+vec3(0,1,1)), hash(i+vec3(1,1,1)), f.x), f.y), f.z);
+    }
+    float fbm(vec3 p) {
+      float f = 0.0; float amp = 0.5;
+      for(int i=0; i<4; i++){ f += amp * noise(p); p *= 2.0; amp *= 0.5; }
+      return f;
+    }
+    void main() {
+      vec3 nPos = normalize(vPos);
+      float lat = asin(nPos.y); float lon = atan(nPos.z, nPos.x);
+      float isCore = exp(-pow(lon, 2.0) * 0.5); 
+      float thickness = 4.0 - 1.5 * isCore;
+      float band = exp(-pow(abs(lat) * thickness, 2.0));
+      float n = fbm(nPos * 15.0);
+      float dust = fbm(nPos * 30.0 + vec3(10.0));
+      float rift = smoothstep(0.3, 0.7, dust);
+      band *= (0.4 + 0.6 * n) * (1.0 - rift * 0.5 * exp(-abs(lat)*10.0));
+      vec3 coreColor = vec3(1.0, 0.8, 0.6); vec3 edgeColor = vec3(0.08, 0.15, 0.35);
+      vec3 color = mix(edgeColor, coreColor, isCore * band);
+      gl_FragColor = vec4(color * band * 0.9, band * 0.6);
+    }
+  `,
+  transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.BackSide
+});
+milkyWayGroup.add(new THREE.Mesh(mwSphereGeo, mwSphereMat));
+
+const mwPointsGeo = new THREE.BufferGeometry();
+const mwPointCount = 40000;
+const mwPos = new Float32Array(mwPointCount * 3);
+const mwColors = new Float32Array(mwPointCount * 3);
+const mwRadius = 250;
+
+for (let i = 0; i < mwPointCount; i++) {
+  let l = Math.random() * Math.PI * 2;
+  if (Math.random() > 0.6) l = (Math.random() - 0.5) * 1.5; 
+  const isCore = Math.exp(-Math.pow(l, 2.0) * 0.5);
+  const spread = 0.12 + 0.1 * isCore;
+  const b = (Math.random() + Math.random() + Math.random() - 1.5) * spread;
+
+  mwPos[i*3] = mwRadius * Math.cos(b) * Math.cos(l);
+  mwPos[i*3+1] = mwRadius * Math.sin(b);
+  mwPos[i*3+2] = mwRadius * Math.cos(b) * Math.sin(l);
+
+  const intensity = 0.3 + Math.random() * 0.7;
+  if (isCore > 0.5 && Math.random() > 0.3) {
+    mwColors[i*3] = 1.0 * intensity; mwColors[i*3+1] = 0.85 * intensity; mwColors[i*3+2] = 0.7 * intensity;
+  } else {
+    mwColors[i*3] = 0.6 * intensity; mwColors[i*3+1] = 0.8 * intensity; mwColors[i*3+2] = 1.0 * intensity;
+  }
+}
+mwPointsGeo.setAttribute('position', new THREE.BufferAttribute(mwPos, 3));
+mwPointsGeo.setAttribute('color', new THREE.BufferAttribute(mwColors, 3));
+
+const mwPointsMat = new THREE.PointsMaterial({
+  size: 0.25, vertexColors: true, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false
+});
+milkyWayGroup.add(new THREE.Points(mwPointsGeo, mwPointsMat));
+
+const raNGP = 192.8595 * Math.PI / 180; const decNGP = 27.1283 * Math.PI / 180;
+const yAxisVec = new THREE.Vector3(Math.cos(decNGP) * Math.cos(raNGP), Math.sin(decNGP), Math.cos(decNGP) * Math.sin(raNGP)).normalize();
+const raGC = 266.4051 * Math.PI / 180; const decGC = -28.9362 * Math.PI / 180;
+const xAxisVec = new THREE.Vector3(Math.cos(decGC) * Math.cos(raGC), Math.sin(decGC), Math.cos(decGC) * Math.sin(raGC)).normalize();
+const zAxisVec = new THREE.Vector3().crossVectors(xAxisVec, yAxisVec).normalize();
+xAxisVec.crossVectors(yAxisVec, zAxisVec).normalize();
+const basisMat = new THREE.Matrix4().makeBasis(xAxisVec, yAxisVec, zAxisVec);
+milkyWayGroup.applyMatrix4(basisMat);
+
+scene.add(milkyWayGroup);
+
+// ===== LIGHTING & SUN =====
+const sun = new THREE.DirectionalLight(0xffffff, 1.35); 
+sun.position.set(8, 2.5, 0);
+scene.add(sun);
+scene.add(new THREE.AmbientLight(0xffffff, 0.18));
+
+const sunGroup = new THREE.Group();
+const sunCore = new THREE.Mesh(new THREE.SphereGeometry(0.115, 40, 40), new THREE.MeshBasicMaterial({ color: 0xfff8de }));
+sunGroup.add(sunCore);
+
+const size = 256;
+const canvasGlow = document.createElement('canvas');
+canvasGlow.width = size; canvasGlow.height = size;
+const ctx = canvasGlow.getContext('2d');
+const gradient = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
+gradient.addColorStop(0, 'rgba(255,255,235,1)');
+gradient.addColorStop(0.16, 'rgba(255,245,200,0.95)');
+gradient.addColorStop(0.34, 'rgba(255,228,120,0.60)');
+gradient.addColorStop(0.62, 'rgba(255,216,90,0.18)');
+gradient.addColorStop(1, 'rgba(255,210,70,0)');
+ctx.fillStyle = gradient; ctx.fillRect(0,0,size,size);
+
+const glowTexture = new THREE.CanvasTexture(canvasGlow);
+const sunGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+sunGlow.scale.set(1.28, 1.28, 1);
+sunGroup.add(sunGlow);
+
+function makeRay(length, thickness, color, opacity){
+  return new THREE.Mesh(
+    new THREE.PlaneGeometry(length, thickness),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false })
+  );
+}
+
+const raysGroup = new THREE.Group();
+const rayAngles = [0, Math.PI/5, -Math.PI/5, Math.PI*2/5, -Math.PI*2/5];
+rayAngles.forEach((angle, i) => {
+  const ray = makeRay(i === 0 ? 0.48 : 0.34, i === 0 ? 0.010 : 0.007, 0xffffff, i === 0 ? 0.95 : 0.8);
+  ray.rotation.z = angle; raysGroup.add(ray);
+});
+sunGroup.add(raysGroup);
+sunGroup.position.copy(sun.position.clone().normalize().multiplyScalar(9.5));
+scene.add(sunGroup);
+
+// ===== MOON =====
+const moonOrbitGroup = new THREE.Group();
+scene.add(moonOrbitGroup);
+let moon = null;
+const moonDistance = 1.72;
+
+function getCurrentMoonAngle() {
+  const now = new Date();
+  const synodicMonthDays = 29.530588853;
+  const referenceNewMoon = Date.UTC(2000, 0, 6, 18, 14, 0);
+  const phase = (((now.getTime() - referenceNewMoon) / 86400000) % synodicMonthDays + synodicMonthDays) % synodicMonthDays / synodicMonthDays;
+  return phase * Math.PI * 2;
+}
+const moonAngle = getCurrentMoonAngle();
+
+function orientMoonTowardEarth(moonMesh) {
+  if (!moonMesh) return;
+  moonMesh.lookAt(0, 0, 0);
+  moonMesh.rotateY(Math.PI);
+}
+
+const loader = new THREE.TextureLoader();
+const moonTexture = loader.load('https://threejs.org/examples/textures/planets/moon_1024.jpg');
+moon = new THREE.Mesh(new THREE.SphereGeometry(0.072, 48, 48), new THREE.MeshPhongMaterial({ map: moonTexture, shininess: 2 }));
+moonOrbitGroup.add(moon);
+moon.position.set(Math.cos(moonAngle) * moonDistance, 0.10 * Math.sin(moonAngle * 0.7), Math.sin(moonAngle) * moonDistance);
+orientMoonTowardEarth(moon);
+
+// ===== EARTH =====
+const dayMap = loader.load('https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg');
+const nightMap = loader.load('https://unpkg.com/three-globe/example/img/earth-night.jpg');
+const normalMap = loader.load('https://threejs.org/examples/textures/planets/earth_normal_2048.jpg');
+const specMap = loader.load('https://threejs.org/examples/textures/planets/earth_specular_2048.jpg');
+
+const earthGroup = new THREE.Group();
+scene.add(earthGroup);
+
+const earthMaterial = new THREE.MeshPhongMaterial({
+  map: dayMap, 
+  normalMap: normalMap, 
+  normalScale: new THREE.Vector2(0.85, 0.85), 
+  specularMap: specMap,
+  shininess: 12, 
+  specular: new THREE.Color(0x111111), 
+  color: new THREE.Color(0xffffff), 
+  emissive: new THREE.Color(0x000000)
+});
+const earth = new THREE.Mesh(new THREE.SphereGeometry(1, 128, 128), earthMaterial);
+earthGroup.add(earth);
+
+// ===== GLOBE.GL TRUE DAY/NIGHT CROSSFADE =====
+const nightMaterial = new THREE.ShaderMaterial({
+  uniforms: { 
+    nightMap: { value: nightMap }, 
+    lightDir: { value: new THREE.Vector3(1, 0, 0) },
+    uMode: { value: 0.0 }
+  },
+  vertexShader: `
+    varying vec2 vUv; varying vec3 vNormalW;
+    void main() { 
+      vUv = uv; 
+      vNormalW = normalize(mat3(modelMatrix) * normal); 
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); 
+    }
+  `,
+  fragmentShader: `
+    uniform sampler2D nightMap; 
+    uniform vec3 lightDir; 
+    uniform float uMode;
+    varying vec2 vUv; 
+    varying vec3 vNormalW;
+    
+    void main() {
+      float lDot = dot(normalize(vNormalW), normalize(lightDir));
+      float nightAlpha = smoothstep(0.2, -0.2, lDot);
+      float alpha = mix(nightAlpha, 1.0, uMode);
+      vec3 nightColor = texture2D(nightMap, vUv).rgb;
+      gl_FragColor = vec4(nightColor, alpha);
+    }
+  `,
+  transparent: true, 
+  blending: THREE.NormalBlending, 
+  depthWrite: false
+});
+const nightSphere = new THREE.Mesh(new THREE.SphereGeometry(1.0015, 128, 128), nightMaterial);
+earthGroup.add(nightSphere);
+
+
+// ===== HEALTH POPULATION PILLARS (STACKED RED/GREEN) =====
+let healthPillarsGroup = new THREE.Group();
+healthPillarsGroup.visible = false;
+healthPillarsGroup.renderOrder = 10;
+earthGroup.add(healthPillarsGroup);
+
+const HEALTH_BASE_OPACITY = 0.96;
+const HEALTH_DIM_FACTOR = 0.28;
+const HEALTH_GREEN = new THREE.Color(0x16a34a);
+const HEALTH_RED = new THREE.Color(0xdc2626);
+const HEALTH_GREEN_DIM = HEALTH_GREEN.clone().multiplyScalar(HEALTH_DIM_FACTOR);
+const HEALTH_RED_DIM = HEALTH_RED.clone().multiplyScalar(HEALTH_DIM_FACTOR);
+const HEALTH_INSTANCE_FULL = new THREE.Color(0xffffff);
+const HEALTH_INSTANCE_DIM = new THREE.Color(HEALTH_DIM_FACTOR, HEALTH_DIM_FACTOR, HEALTH_DIM_FACTOR);
+
+let greenInstances = null;
+let redInstances = null;
+
+const healthPillarMaterials = {
+  // Final color fix:
+  // Use material color only, exactly like the stable non-instanced version.
+  // Red and green are separate InstancedMeshes, so we do not need instance colors.
+  red: new THREE.MeshBasicMaterial({ color: 0xdc2626, transparent: true, opacity: HEALTH_BASE_OPACITY }),
+  green: new THREE.MeshBasicMaterial({ color: 0x16a34a, transparent: true, opacity: HEALTH_BASE_OPACITY })
+};
+
+const basePillarGeometry = new THREE.CylinderGeometry(1, 1, 1, 24, 1, false);
+const tmpMatrix = new THREE.Matrix4();
+const tmpQuat = new THREE.Quaternion();
+const tmpScale = new THREE.Vector3();
+
+function clamp01(v) {
+  return Math.max(0, Math.min(1, v));
+}
+
+function clusteredGreenShare(lat, lng) {
+  const a = 0.5 + 0.5 * Math.sin((lat + 18.0) * 0.11);
+  const b = 0.5 + 0.5 * Math.cos((lng - 22.0) * 0.08);
+  const c = 0.5 + 0.5 * Math.sin((lat + lng) * 0.045);
+  const d = 0.5 + 0.5 * Math.cos((lat - lng) * 0.035);
+  const raw = a * 0.34 + b * 0.28 + c * 0.22 + d * 0.16;
+  return Math.pow(clamp01(raw), 1.65);
+}
+
+
+
+const CURATED_TOP100_LABELS = {
+  "35.6850_139.7514": "Tokyo",
+  "40.6943_-73.9249": "New York",
+  "19.4424_-99.1310": "Mexico City",
+  "19.0170_72.8570": "Mumbai",
+  "-23.5587_-46.6250": "São Paulo",
+  "28.6700_77.2300": "Delhi",
+  "31.2165_121.4365": "Shanghai",
+  "22.4950_88.3247": "Kolkata",
+  "34.1139_-118.4068": "Los Angeles",
+  "23.7231_90.4086": "Dhaka",
+  "-34.6025_-58.3975": "Buenos Aires",
+  "24.8700_66.9900": "Karachi",
+  "30.0500_31.2500": "Cairo",
+  "-22.9250_-43.2250": "Rio de Janeiro",
+  "34.7500_135.4601": "Osaka",
+  "39.9289_116.3883": "Beijing",
+  "14.6042_120.9822": "Manila",
+  "55.7522_37.6155": "Moscow",
+  "41.1050_29.0100": "Istanbul",
+  "48.8667_2.3333": "Paris",
+  "37.5663_126.9997": "Seoul",
+  "6.4433_3.3915": "Lagos",
+  "-6.1744_106.8294": "Jakarta",
+  "23.1450_113.3250": "Guangzhou",
+  "41.8373_-87.6861": "Chicago",
+  "51.5000_-0.1167": "London",
+  "-12.0480_-77.0501": "Lima",
+  "35.6719_51.4243": "Tehran",
+  "-4.3297_15.3150": "Kinshasa",
+  "4.5964_-74.0833": "Bogotá",
+  "22.5524_114.1221": "Shenzhen",
+  "30.5800_114.2700": "Wuhan",
+  "22.3050_114.1850": "Hong Kong",
+  "39.1300_117.2000": "Tianjin",
+  "13.0900_80.2800": "Chennai",
+  "25.0358_121.5683": "Taipei",
+  "12.9700_77.5600": "Bangalore",
+  "13.7500_100.5166": "Bangkok",
+  "31.5600_74.3500": "Lahore",
+  "29.5650_106.5950": "Chongqing",
+  "25.7840_-80.2102": "Miami",
+  "17.4000_78.4800": "Hyderabad",
+  "32.7937_-96.7662": "Dallas-Fort Worth",
+  "-33.4500_-70.6670": "Santiago",
+  "40.0076_-75.1340": "Philadelphia",
+  "-19.9150_-43.9150": "Belo Horizonte",
+  "40.4000_-3.6834": "Madrid",
+  "29.7868_-95.3905": "Houston",
+  "23.0301_72.5800": "Ahmedabad",
+  "10.7800_106.6950": "Ho Chi Minh City",
+  "38.9047_-77.0163": "Washington, DC",
+  "33.7626_-84.4228": "Atlanta",
+  "43.7000_-79.4200": "Toronto",
+  "1.2930_103.8558": "Singapore",
+  "-8.8383_13.2344": "Luanda",
+  "33.3386_44.3939": "Baghdad",
+  "41.3833_2.1834": "Barcelona",
+  "22.5804_88.3299": "Howrah",
+  "41.8050_123.4500": "Shenyang",
+  "15.5881_32.5342": "Khartoum",
+  "18.5300_73.8500": "Pune",
+  "42.3188_-71.0846": "Boston",
+  "-33.9200_151.1852": "Sydney",
+  "59.9390_30.3160": "Saint Petersburg",
+  "22.3300_91.8000": "Chittagong",
+  "23.0489_113.7447": "Dongguan",
+  "24.6408_46.7727": "Riyadh",
+  "21.0333_105.8500": "Hanoi",
+  "20.6700_-103.3300": "Guadalajara",
+  "-37.8200_144.9750": "Melbourne",
+  "31.2000_29.9500": "Alexandria",
+  "30.6700_104.0700": "Chengdu",
+  "16.7834_96.1667": "Yangon",
+  "33.5722_-112.0891": "Phoenix",
+  "34.2750_108.8950": "Xi'an",
+  "-30.0500_-51.2000": "Porto Alegre",
+  "21.2000_72.8400": "Surat",
+  "23.0965_109.6091": "Guigang",
+  "5.3200_-4.0400": "Abidjan",
+  "-15.7833_-47.9161": "Brasília",
+  "39.9272_32.8644": "Ankara",
+  "25.6700_-100.3300": "Monterrey",
+  "35.3200_139.5800": "Yokohama",
+  "32.0500_118.7800": "Nanjing",
+  "45.5000_-73.5833": "Montreal",
+  "26.5800_106.7200": "Guiyang",
+  "-8.0756_-34.9156": "Recife",
+  "47.6211_-122.3244": "Seattle",
+  "45.7500_126.6500": "Harbin",
+  "37.7562_-122.4430": "San Francisco",
+  "-3.7500_-38.5800": "Fortaleza",
+  "24.5204_117.6700": "Xiamen",
+  "42.3834_-83.1024": "Detroit",
+  "-12.9700_-38.4800": "Salvador",
+  "35.0951_129.0100": "Busan",
+  "-26.1700_28.0300": "Johannesburg",
+  "52.5218_13.4015": "Berlin",
+  "36.7631_3.0506": "Algiers",
+  "41.8960_12.4833": "Rome",
+  "39.0194_125.7547": "Pyongyang"
+};
+
+
+const CURATED_TOP200_ADDITIONAL_LABELS = [
+  {
+    "name": "Kabul",
+    "lat": 34.5253,
+    "lng": 69.1783
+  },
+  {
+    "name": "Athens",
+    "lat": 37.9833,
+    "lng": 23.7333
+  },
+  {
+    "name": "Nagoya",
+    "lat": 35.1833,
+    "lng": 136.9
+  },
+  {
+    "name": "Cape Town",
+    "lat": -33.9258,
+    "lng": 18.4232
+  },
+  {
+    "name": "San Diego",
+    "lat": 32.8312,
+    "lng": -117.1225
+  },
+  {
+    "name": "Durban",
+    "lat": -29.8587,
+    "lng": 31.0218
+  },
+  {
+    "name": "Casablanca",
+    "lat": 33.5992,
+    "lng": -7.62
+  },
+  {
+    "name": "Dalian",
+    "lat": 38.9228,
+    "lng": 121.6298
+  },
+  {
+    "name": "Kanpur",
+    "lat": 26.4499,
+    "lng": 80.3319
+  },
+  {
+    "name": "Kano",
+    "lat": 12.0,
+    "lng": 8.5167
+  },
+  {
+    "name": "Tel Aviv–Yafo",
+    "lat": 32.08,
+    "lng": 34.7806
+  },
+  {
+    "name": "Addis Ababa",
+    "lat": 9.03,
+    "lng": 38.74
+  },
+  {
+    "name": "Curitiba",
+    "lat": -25.42,
+    "lng": -49.32
+  },
+  {
+    "name": "Zibo",
+    "lat": 36.8,
+    "lng": 118.05
+  },
+  {
+    "name": "Jeddah",
+    "lat": 21.5428,
+    "lng": 39.1728
+  },
+  {
+    "name": "Nairobi",
+    "lat": -1.2864,
+    "lng": 36.8172
+  },
+  {
+    "name": "Hangzhou",
+    "lat": 30.25,
+    "lng": 120.1675
+  },
+  {
+    "name": "Benoni",
+    "lat": -26.1496,
+    "lng": 28.3299
+  },
+  {
+    "name": "Caracas",
+    "lat": 10.5,
+    "lng": -66.9333
+  },
+  {
+    "name": "Milan",
+    "lat": 45.4669,
+    "lng": 9.19
+  },
+  {
+    "name": "Stuttgart",
+    "lat": 48.7775,
+    "lng": 9.18
+  },
+  {
+    "name": "Kunming",
+    "lat": 25.0433,
+    "lng": 102.7061
+  },
+  {
+    "name": "Dar es Salaam",
+    "lat": -6.8,
+    "lng": 39.2833
+  },
+  {
+    "name": "Minneapolis–Saint Paul",
+    "lat": 44.9635,
+    "lng": -93.2678
+  },
+  {
+    "name": "Jaipur",
+    "lat": 26.9167,
+    "lng": 75.8667
+  },
+  {
+    "name": "Taiyuan",
+    "lat": 37.8733,
+    "lng": 112.5425
+  },
+  {
+    "name": "Frankfurt",
+    "lat": 50.1136,
+    "lng": 8.6797
+  },
+  {
+    "name": "Qingdao",
+    "lat": 36.1167,
+    "lng": 120.4
+  },
+  {
+    "name": "Surabaya",
+    "lat": -7.2458,
+    "lng": 112.7378
+  },
+  {
+    "name": "Lisbon",
+    "lat": 38.7452,
+    "lng": -9.1604
+  },
+  {
+    "name": "Tampa–St. Petersburg",
+    "lat": 27.9942,
+    "lng": -82.4451
+  },
+  {
+    "name": "Jinan",
+    "lat": 36.6667,
+    "lng": 117.0
+  },
+  {
+    "name": "Fukuoka",
+    "lat": 33.5904,
+    "lng": 130.4017
+  },
+  {
+    "name": "Campinas",
+    "lat": -22.9,
+    "lng": -47.1
+  },
+  {
+    "name": "Denver",
+    "lat": 39.7621,
+    "lng": -104.8759
+  },
+  {
+    "name": "Kaohsiung",
+    "lat": 22.6333,
+    "lng": 120.2666
+  },
+  {
+    "name": "Quezon City",
+    "lat": 14.6504,
+    "lng": 121.03
+  },
+  {
+    "name": "Katowice",
+    "lat": 50.2604,
+    "lng": 19.02
+  },
+  {
+    "name": "Aleppo",
+    "lat": 36.2304,
+    "lng": 37.17
+  },
+  {
+    "name": "Urumqi",
+    "lat": 43.805,
+    "lng": 87.575
+  },
+  {
+    "name": "Yokohama",
+    "lat": 35.455,
+    "lng": 139.638
+  },
+  {
+    "name": "Kibanseke",
+    "lat": -4.4419,
+    "lng": 15.395
+  },
+  {
+    "name": "Mashhad",
+    "lat": 36.2605,
+    "lng": 59.6168
+  },
+  {
+    "name": "Jilin",
+    "lat": 43.85,
+    "lng": 126.55
+  },
+  {
+    "name": "Zhengzhou",
+    "lat": 34.7492,
+    "lng": 113.6605
+  },
+  {
+    "name": "Montevideo",
+    "lat": -34.858,
+    "lng": -56.1711
+  },
+  {
+    "name": "Tabriz",
+    "lat": 38.08,
+    "lng": 46.2919
+  },
+  {
+    "name": "Yaoundé",
+    "lat": 3.8667,
+    "lng": 11.5167
+  },
+  {
+    "name": "Douala",
+    "lat": 4.05,
+    "lng": 9.7
+  },
+  {
+    "name": "Monterrey",
+    "lat": 25.6667,
+    "lng": -100.3
+  },
+  {
+    "name": "Giza",
+    "lat": 30.01,
+    "lng": 31.19
+  },
+  {
+    "name": "Medellín",
+    "lat": 6.2447,
+    "lng": -75.5748
+  },
+  {
+    "name": "Kuwait City",
+    "lat": 29.3697,
+    "lng": 47.9783
+  },
+  {
+    "name": "Recife",
+    "lat": -8.05,
+    "lng": -34.9
+  },
+  {
+    "name": "Harare",
+    "lat": -17.8292,
+    "lng": 31.0522
+  },
+  {
+    "name": "Tai'an",
+    "lat": 36.2,
+    "lng": 117.12
+  },
+  {
+    "name": "Bandung",
+    "lat": -6.912,
+    "lng": 107.6097
+  },
+  {
+    "name": "Sapporo",
+    "lat": 43.0621,
+    "lng": 141.3544
+  },
+  {
+    "name": "Brasília",
+    "lat": -15.7833,
+    "lng": -47.9161
+  },
+  {
+    "name": "Porto Alegre",
+    "lat": -30.0331,
+    "lng": -51.23
+  },
+  {
+    "name": "Changchun",
+    "lat": 43.9,
+    "lng": 125.2
+  },
+  {
+    "name": "Lucknow",
+    "lat": 26.85,
+    "lng": 80.95
+  },
+  {
+    "name": "Wenzhou",
+    "lat": 27.9991,
+    "lng": 120.6561
+  },
+  {
+    "name": "Ibadan",
+    "lat": 7.3964,
+    "lng": 3.9167
+  },
+  {
+    "name": "Faisalabad",
+    "lat": 31.418,
+    "lng": 73.079
+  },
+  {
+    "name": "Fuzhou",
+    "lat": 26.0769,
+    "lng": 119.2917
+  },
+  {
+    "name": "Nanchang",
+    "lat": 28.6833,
+    "lng": 115.8833
+  },
+  {
+    "name": "Kumasi",
+    "lat": 6.7,
+    "lng": -1.625
+  },
+  {
+    "name": "Medan",
+    "lat": 3.5894,
+    "lng": 98.6739
+  },
+  {
+    "name": "Bamako",
+    "lat": 12.65,
+    "lng": -8.0
+  },
+  {
+    "name": "Bekasi",
+    "lat": -6.2349,
+    "lng": 106.9896
+  },
+  {
+    "name": "Guayaquil",
+    "lat": -2.1833,
+    "lng": -79.8833
+  },
+  {
+    "name": "Huizhou",
+    "lat": 23.1115,
+    "lng": 114.4152
+  },
+  {
+    "name": "Lanzhou",
+    "lat": 36.0611,
+    "lng": 103.8343
+  },
+  {
+    "name": "Cali",
+    "lat": 3.44,
+    "lng": -76.5197
+  },
+  {
+    "name": "Abuja",
+    "lat": 9.0667,
+    "lng": 7.4833
+  },
+  {
+    "name": "Sana'a",
+    "lat": 15.3483,
+    "lng": 44.2064
+  },
+  {
+    "name": "Dubai",
+    "lat": 25.2697,
+    "lng": 55.3095
+  },
+  {
+    "name": "Santa Cruz",
+    "lat": -17.8,
+    "lng": -63.1667
+  },
+  {
+    "name": "Linyi",
+    "lat": 35.0606,
+    "lng": 118.3425
+  },
+  {
+    "name": "Baku",
+    "lat": 40.3953,
+    "lng": 49.8822
+  },
+  {
+    "name": "Incheon",
+    "lat": 37.4761,
+    "lng": 126.6422
+  },
+  {
+    "name": "Ningbo",
+    "lat": 29.875,
+    "lng": 121.5492
+  },
+  {
+    "name": "Tashkent",
+    "lat": 41.3111,
+    "lng": 69.2797
+  },
+  {
+    "name": "Accra",
+    "lat": 5.55,
+    "lng": -0.2
+  },
+  {
+    "name": "Minsk",
+    "lat": 53.9,
+    "lng": 27.5667
+  },
+  {
+    "name": "Lusaka",
+    "lat": -15.4167,
+    "lng": 28.2833
+  },
+  {
+    "name": "Santo Domingo",
+    "lat": 18.4764,
+    "lng": -69.8933
+  },
+  {
+    "name": "Brasov",
+    "lat": 45.65,
+    "lng": 25.6
+  },
+  {
+    "name": "Bursa",
+    "lat": 40.1833,
+    "lng": 29.0667
+  },
+  {
+    "name": "Isfahan",
+    "lat": 32.6447,
+    "lng": 51.6675
+  },
+  {
+    "name": "Dakar",
+    "lat": 14.6928,
+    "lng": -17.4467
+  },
+  {
+    "name": "Tunis",
+    "lat": 36.8064,
+    "lng": 10.1817
+  },
+  {
+    "name": "Dalian",
+    "lat": 38.9,
+    "lng": 121.6
+  },
+  {
+    "name": "Lyon",
+    "lat": 45.76,
+    "lng": 4.84
+  },
+  {
+    "name": "Surat",
+    "lat": 21.1702,
+    "lng": 72.8311
+  },
+  {
+    "name": "Vadodara",
+    "lat": 22.3,
+    "lng": 73.2
+  },
+  {
+    "name": "Nagpur",
+    "lat": 21.1497,
+    "lng": 79.0806
+  },
+  {
+    "name": "Patna",
+    "lat": 25.61,
+    "lng": 85.1414
+  },
+  {
+    "name": "Indore",
+    "lat": 22.72,
+    "lng": 75.8472
+  },
+  {
+    "name": "Coimbatore",
+    "lat": 11.0168,
+    "lng": 76.9558
+  },
+  {
+    "name": "Kochi",
+    "lat": 9.9667,
+    "lng": 76.2833
+  },
+  {
+    "name": "Visakhapatnam",
+    "lat": 17.7333,
+    "lng": 83.3167
+  },
+  {
+    "name": "Agra",
+    "lat": 27.18,
+    "lng": 78.02
+  },
+  {
+    "name": "Bhopal",
+    "lat": 23.25,
+    "lng": 77.4167
+  },
+  {
+    "name": "Ludhiana",
+    "lat": 30.9,
+    "lng": 75.85
+  },
+  {
+    "name": "Madurai",
+    "lat": 9.9252,
+    "lng": 78.1198
+  },
+  {
+    "name": "Varanasi",
+    "lat": 25.3189,
+    "lng": 83.0128
+  },
+  {
+    "name": "Meerut",
+    "lat": 28.98,
+    "lng": 77.71
+  },
+  {
+    "name": "Rawalpindi",
+    "lat": 33.6,
+    "lng": 73.0333
+  },
+  {
+    "name": "Multan",
+    "lat": 30.1978,
+    "lng": 71.4711
+  },
+  {
+    "name": "Peshawar",
+    "lat": 34.0144,
+    "lng": 71.5675
+  },
+  {
+    "name": "Quetta",
+    "lat": 30.1833,
+    "lng": 67.0
+  },
+  {
+    "name": "Córdoba",
+    "lat": -31.4167,
+    "lng": -64.1833
+  },
+  {
+    "name": "Rosario",
+    "lat": -32.95,
+    "lng": -60.6667
+  },
+  {
+    "name": "Mendoza",
+    "lat": -32.8833,
+    "lng": -68.8167
+  },
+  {
+    "name": "Valparaíso",
+    "lat": -33.0472,
+    "lng": -71.6127
+  },
+  {
+    "name": "Barranquilla",
+    "lat": 10.9639,
+    "lng": -74.7964
+  },
+  {
+    "name": "Maracaibo",
+    "lat": 10.6333,
+    "lng": -71.6333
+  },
+  {
+    "name": "Quito",
+    "lat": -0.2186,
+    "lng": -78.5097
+  },
+  {
+    "name": "La Paz",
+    "lat": -16.5,
+    "lng": -68.15
+  },
+  {
+    "name": "Asunción",
+    "lat": -25.3,
+    "lng": -57.6333
+  },
+  {
+    "name": "San José",
+    "lat": 9.9281,
+    "lng": -84.0907
+  },
+  {
+    "name": "Guatemala City",
+    "lat": 14.6133,
+    "lng": -90.5353
+  },
+  {
+    "name": "San Salvador",
+    "lat": 13.6989,
+    "lng": -89.1914
+  },
+  {
+    "name": "Port-au-Prince",
+    "lat": 18.5425,
+    "lng": -72.3386
+  },
+  {
+    "name": "Havana",
+    "lat": 23.1367,
+    "lng": -82.3589
+  },
+  {
+    "name": "Santo Domingo",
+    "lat": 18.4861,
+    "lng": -69.9312
+  },
+  {
+    "name": "San Juan",
+    "lat": 18.4655,
+    "lng": -66.1057
+  },
+  {
+    "name": "Colombo",
+    "lat": 6.9167,
+    "lng": 79.8333
+  },
+  {
+    "name": "Kathmandu",
+    "lat": 27.7172,
+    "lng": 85.324
+  },
+  {
+    "name": "Mandalay",
+    "lat": 21.9588,
+    "lng": 96.0891
+  },
+  {
+    "name": "Phnom Penh",
+    "lat": 11.5696,
+    "lng": 104.921
+  },
+  {
+    "name": "Vientiane",
+    "lat": 17.9667,
+    "lng": 102.6
+  },
+  {
+    "name": "Ulaanbaatar",
+    "lat": 47.92,
+    "lng": 106.92
+  }
+];
+
+function nearbyCuratedAdditionalLabel(lat, lng) {
+  let best = null;
+  let bestScore = Infinity;
+  const latR = Number(lat) * Math.PI / 180;
+  const lngR = Number(lng) * Math.PI / 180;
+  for (const item of CURATED_TOP200_ADDITIONAL_LABELS) {
+    const clat = item.lat * Math.PI / 180;
+    const clng = item.lng * Math.PI / 180;
+    const dlat = clat - latR;
+    const dlng = clng - lngR;
+    const a = Math.sin(dlat / 2) ** 2 + Math.cos(latR) * Math.cos(clat) * Math.sin(dlng / 2) ** 2;
+    const dist = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    if (dist < bestScore) {
+      bestScore = dist;
+      best = item;
+    }
+  }
+  // Strict enough to avoid obvious wrong labels, loose enough for the source dataset's rounded city coordinates.
+  return best && bestScore < 0.035 ? best.name : null;
+}
+
+function top100CoordKey(lat, lng) {
+  return `${Number(lat).toFixed(4)}_${Number(lng).toFixed(4)}`;
+}
+
+function curatedPlaceLabel(lat, lng) {
+  return CURATED_TOP100_LABELS[top100CoordKey(lat, lng)] || nearbyCuratedAdditionalLabel(lat, lng) || null;
+}
+
+function approxCityName(lat, lng) {
+  // Fallback only. worldcities.csv rows use meta.placeLabel directly.
+  return curatedPlaceLabel(lat, lng) || `${Number(lat).toFixed(4)}, ${Number(lng).toFixed(4)}`;
+}
+
+function setInstance(mesh, instanceId, meta, centerPos, height, radius, color) {
+  const normal = centerPos.clone().normalize();
+  tmpQuat.setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
+  tmpScale.set(radius, height, radius);
+  tmpMatrix.compose(centerPos, tmpQuat, tmpScale);
+  mesh.setMatrixAt(instanceId, tmpMatrix);
+  // Instance colors intentionally disabled; separate red/green materials control pillar color.
+  meta.centerPosition = centerPos.clone();
+  meta.topPosition = centerPos.clone().add(normal.clone().multiplyScalar(height * 0.5));
+}
+
+function disposeHealthInstances() {
+  while (healthPillarsGroup.children.length) {
+    const child = healthPillarsGroup.children.pop();
+    if (child.dispose) child.dispose();
+  }
+  greenInstances = null;
+  redInstances = null;
+}
+
+function rebuildHealthPillars(data) {
+  disposeHealthInstances();
+
+  if (!data.length) return;
+
+  const maxPop = fullPopulationMaxPop || Math.max(...data.map(d => d.pop));
+  const totalPop = data.reduce((sum, d) => sum + d.pop, 0);
+
+  const rawShares = data.map(d => clusteredGreenShare(d.lat, d.lng));
+  const rawWeightedAvg = rawShares.reduce((sum, share, idx) => sum + share * data[idx].pop, 0) / totalPop;
+  const shareScale = rawWeightedAvg > 0 ? 0.20 / rawWeightedAvg : 1.0;
+
+  const prepared = data.map((d, idx) => {
+    const popNorm = Math.sqrt(d.pop / maxPop);
+    const totalHeight = 0.01 + popNorm * 0.24;
+    const radius = 0.0025 + popNorm * 0.0095;
+
+    const greenShare = clamp01(rawShares[idx] * shareScale);
+    const greenHeight = totalHeight * greenShare;
+    const redHeight = totalHeight - greenHeight;
+
+    const base = latLonToVec(d.lat, d.lng, 1.0015);
+    const normal = base.clone().normalize();
+    const pillarId = d.id || `${d.lat}_${d.lng}`;
+    const meta = {
+      id: d.id || null,
+      source: d.source || null,
+      city: d.city || null,
+      cityAscii: d.cityAscii || null,
+      adminName: d.adminName || null,
+      placeLabel: d.placeLabel || d.city || d.cityAscii || d.adminName || null,
+      lat: d.lat,
+      lng: d.lng,
+      pop: d.pop,
+      greenShare,
+      redShare: 1 - greenShare,
+      radius,
+      pillarId,
+      totalHeight
+    };
+
+    return { base, normal, greenHeight, redHeight, radius, meta };
+  });
+
+  const greenCount = prepared.filter(p => p.greenHeight > 0.0005).length;
+  const redCount = prepared.filter(p => p.redHeight > 0.0005).length;
+
+  greenInstances = new THREE.InstancedMesh(basePillarGeometry, healthPillarMaterials.green, Math.max(1, greenCount));
+  redInstances = new THREE.InstancedMesh(basePillarGeometry, healthPillarMaterials.red, Math.max(1, redCount));
+
+  greenInstances.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+  redInstances.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+
+  greenInstances.userData.segmentType = 'positive';
+  redInstances.userData.segmentType = 'negative';
+  greenInstances.userData.metas = [];
+  redInstances.userData.metas = [];
+
+  let gi = 0;
+  let ri = 0;
+
+  for (const p of prepared) {
+    if (p.greenHeight > 0.0005) {
+      const center = p.base.clone().add(p.normal.clone().multiplyScalar(p.greenHeight * 0.5));
+      const meta = Object.assign({ segmentType: 'positive' }, p.meta);
+      setInstance(greenInstances, gi, meta, center, p.greenHeight, p.radius, HEALTH_GREEN);
+      greenInstances.userData.metas[gi] = meta;
+      gi++;
+    }
+
+    if (p.redHeight > 0.0005) {
+      const center = p.base.clone().add(p.normal.clone().multiplyScalar(p.greenHeight + p.redHeight * 0.5));
+      const meta = Object.assign({ segmentType: 'negative' }, p.meta);
+      setInstance(redInstances, ri, meta, center, p.redHeight, p.radius, HEALTH_RED);
+      redInstances.userData.metas[ri] = meta;
+      ri++;
+    }
+  }
+
+  greenInstances.instanceMatrix.needsUpdate = true;
+  redInstances.instanceMatrix.needsUpdate = true;
+  if (greenInstances.instanceColor) greenInstances.instanceColor.needsUpdate = true;
+  if (redInstances.instanceColor) redInstances.instanceColor.needsUpdate = true;
+
+  healthPillarsGroup.add(greenInstances);
+  healthPillarsGroup.add(redInstances);
+  updateHealthPillarVisibility();
+}
+
+function updateHealthPillarVisibility() {
+  healthPillarsGroup.visible = healthMode;
+  if (greenInstances) greenInstances.visible = healthMode && !healthOnlyNegative;
+  if (redInstances) redInstances.visible = healthMode && !healthOnlyPositive;
+
+  if (!healthMode) {
+    clearSelectedPillarOverlay();
+    setHealthInstanceOpacity(HEALTH_FOCUS_FULL_OPACITY);
+  } else if (selectedPillar) {
+    updatePillarSelectionFade();
+  }
+}
+
+
+function pillarHeightPercentile(d) {
+  if (!fullPopulationMaxPop || !d || !Number.isFinite(d.pop)) return 0;
+  const popNorm = Math.sqrt(d.pop / fullPopulationMaxPop);
+  const totalHeight = 0.01 + popNorm * 0.24;
+
+  // This matches the exact height formula used by rebuildHealthPillars.
+  const minHeight = 0.01;
+  const maxHeight = 0.25;
+
+  return clamp01((totalHeight - minHeight) / (maxHeight - minHeight)) * 100;
+}
+
+function clampPillarHeightHandles() {
+  pillarHeightPercentMin = Math.max(0, Math.min(100, Number(pillarHeightRangeMin.value)));
+  pillarHeightPercentMax = Math.max(0, Math.min(100, Number(pillarHeightRangeMax.value)));
+
+  if (pillarHeightPercentMin >= pillarHeightPercentMax) {
+    const active = document.activeElement;
+    if (active === pillarHeightRangeMin) {
+      pillarHeightPercentMin = pillarHeightPercentMax - 1;
+      pillarHeightRangeMin.value = pillarHeightPercentMin;
+    } else {
+      pillarHeightPercentMax = pillarHeightPercentMin + 1;
+      pillarHeightRangeMax.value = pillarHeightPercentMax;
+    }
+  }
+}
+
+function filteredPopulationByHeightPercentile() {
+  if (!fullPopulationDataset.length) return [];
+
+  return fullPopulationDataset.filter(d => {
+    const p = pillarHeightPercentile(d);
+    return p >= pillarHeightPercentMin && p <= pillarHeightPercentMax;
+  });
+}
+
+function updatePillarHeightRangeUI(filteredCount = null) {
+  if (pillarHeightSliderFill) {
+    pillarHeightSliderFill.style.left = `${pillarHeightPercentMin}%`;
+    pillarHeightSliderFill.style.width = `${pillarHeightPercentMax - pillarHeightPercentMin}%`;
+  }
+
+  if (pillarHeightRangeReadout) {
+    pillarHeightRangeReadout.textContent =
+      `Showing ${pillarHeightPercentMin}th – ${pillarHeightPercentMax}th percentile height`;
+  }
+
+  if (pillarHeightRangeCount) {
+    const total = fullPopulationDataset.length;
+    const count = filteredCount === null ? total : filteredCount;
+    pillarHeightRangeCount.textContent = total
+      ? `${count.toLocaleString()} of ${total.toLocaleString()} columns`
+      : 'Loading columns…';
+  }
+}
+
+function updatePillarHeightPercentileFilter() {
+  if (!fullPopulationDataset.length) {
+    updatePillarHeightRangeUI(0);
+    return;
+  }
+
+  clearSelection();
+
+  const filtered = filteredPopulationByHeightPercentile();
+  rebuildHealthPillars(filtered);
+  updatePillarHeightRangeUI(filtered.length);
+}
+
+function handlePillarHeightRangeInput() {
+  clampPillarHeightHandles();
+  updatePillarHeightPercentileFilter();
+}
+
+
+function parseCsvLine(line) {
+  const result = [];
+  let current = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    const next = line[i + 1];
+
+    if (char === '"' && inQuotes && next === '"') {
+      current += '"';
+      i++;
+    } else if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === ',' && !inQuotes) {
+      result.push(current);
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+
+  result.push(current);
+  return result;
+}
+
+function cleanCsvValue(value) {
+  return String(value || '').trim();
+}
+
+function loadWorldCitiesDataset() {
+  console.log('🌍 Attempting to load local worldcities.csv...');
+
+  return fetch('worldcities.csv', { cache: 'no-store' })
+    .then(res => {
+      if (!res.ok) throw new Error(`worldcities.csv not found/readable: ${res.status}`);
+      return res.text();
+    })
+    .then(csv => {
+      const lines = csv.split(/\r?\n/).filter(line => line.trim().length > 0);
+      if (lines.length < 2) throw new Error('worldcities.csv appears empty');
+
+      const header = parseCsvLine(lines[0]).map(h => cleanCsvValue(h).toLowerCase());
+      const cityIdx = header.indexOf('city');
+      const cityAsciiIdx = header.indexOf('city_ascii');
+      const latIdx = header.indexOf('lat');
+      const lngIdx = header.indexOf('lng');
+      const adminIdx = header.indexOf('admin_name');
+      const popIdx = header.indexOf('population');
+      const idIdx = header.indexOf('id');
+
+      if (cityIdx < 0 || latIdx < 0 || lngIdx < 0 || popIdx < 0) {
+        throw new Error(`worldcities.csv missing required headers. Found: ${header.join(', ')}`);
+      }
+
+      const data = [];
+      for (let i = 1; i < lines.length; i++) {
+        const cols = parseCsvLine(lines[i]);
+        const city = cleanCsvValue(cols[cityIdx]);
+        const cityAscii = cityAsciiIdx >= 0 ? cleanCsvValue(cols[cityAsciiIdx]) : '';
+        const adminName = adminIdx >= 0 ? cleanCsvValue(cols[adminIdx]) : '';
+        const id = idIdx >= 0 ? cleanCsvValue(cols[idIdx]) : '';
+        const lat = parseFloat(cols[latIdx]);
+        const lng = parseFloat(cols[lngIdx]);
+        const pop = parseFloat(cols[popIdx]);
+
+        if (Number.isFinite(lat) && Number.isFinite(lng) && Number.isFinite(pop) && pop > 0 && (city || cityAscii || adminName)) {
+          data.push({
+            id: id || `${lat}_${lng}_${city || cityAscii || adminName}`,
+            city: city || cityAscii || null,
+            cityAscii: cityAscii || null,
+            adminName: adminName || null,
+            placeLabel: city || cityAscii || adminName,
+            lat,
+            lng,
+            pop,
+            source: 'worldcities'
+          });
+        }
+      }
+
+      console.log(`✅ Loaded local worldcities.csv: ${data.length.toLocaleString()} cities`);
+      console.log('✅ worldcities.csv first parsed city:', data[0]);
+      return data;
+    });
+}
+
+function loadFallbackPopulationDataset(reason) {
+  console.warn('⚠️ Falling back to original population grid dataset:', reason);
+
+  return fetch('https://raw.githubusercontent.com/vasturiano/globe.gl/master/example/datasets/world_population.csv')
+    .then(res => res.text())
+    .then(csv => {
+      const lines = csv.split('\n').slice(1);
+      const data = [];
+
+      for (let i = 0; i < lines.length; i++) {
+        if (!lines[i].trim()) continue;
+        const parts = lines[i].split(',');
+        const lat = parseFloat(parts[0]);
+        const lng = parseFloat(parts[1]);
+        const pop = parseFloat(parts[2]);
+        if (Number.isFinite(lat) && Number.isFinite(lng) && Number.isFinite(pop)) {
+          data.push({
+            id: `${lat}_${lng}`,
+            city: null,
+            cityAscii: null,
+            adminName: null,
+            placeLabel: null,
+            lat,
+            lng,
+            pop,
+            source: 'population-grid'
+          });
+        }
+      }
+
+      console.log(`✅ Loaded fallback population grid: ${data.length.toLocaleString()} columns`);
+      return data;
+    });
+}
+
+function applyLoadedHealthDataset(data) {
+  fullPopulationDataset = data
+    .slice()
+    .sort((a, b) => b.pop - a.pop);
+
+  fullPopulationMaxPop = Math.max(...fullPopulationDataset.map(d => d.pop));
+  console.log(`✅ Active health dataset: ${fullPopulationDataset[0]?.source || 'unknown'} | ${fullPopulationDataset.length.toLocaleString()} columns`);
+  updatePillarHeightPercentileFilter();
+}
+
+loadWorldCitiesDataset()
+  .catch(loadFallbackPopulationDataset)
+  .then(applyLoadedHealthDataset)
+  .catch(err => console.error('Error loading health pillar data:', err));
+
+// ===== SUPERCHARGED ATMOSPHERE GLOW =====
+const atmosphereMaterial = new THREE.ShaderMaterial({
+  uniforms: { lightDir: { value: new THREE.Vector3(1, 0, 0) } },
+  vertexShader: `
+    varying vec3 vNormalView; varying vec3 vNormalWorld;
+    void main() { vNormalView = normalize(normalMatrix * normal); vNormalWorld = normalize(mat3(modelMatrix) * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
+  `,
+  fragmentShader: `
+    uniform vec3 lightDir; varying vec3 vNormalView; varying vec3 vNormalWorld;
+    void main() {
+      float fresnel = pow(1.0 - max(0.0, dot(vNormalView, vec3(0.0, 0.0, 1.0))), 2.8);
+      float lDot = dot(normalize(vNormalWorld), normalize(lightDir));
+      vec3 dayColor = vec3(0.3, 0.6, 1.0);
+      vec3 sunsetColor = vec3(1.5, 0.5, 0.1); 
+      vec3 color = mix(sunsetColor, dayColor, smoothstep(-0.15, 0.4, lDot));
+      float alpha = fresnel * smoothstep(-0.05, 0.2, lDot) * 1.2;
+      gl_FragColor = vec4(color, alpha);
+    }
+  `,
+  transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.FrontSide
+});
+const atmosphereSphere = new THREE.Mesh(new THREE.SphereGeometry(1.032, 128, 128), atmosphereMaterial);
+earthGroup.add(atmosphereSphere);
+
+// ===== POLAR AURORAS =====
+const auroraMaterial = new THREE.ShaderMaterial({
+  uniforms: { time: { value: 0 }, lightDir: { value: new THREE.Vector3(1, 0, 0) }, uMode: { value: 0.0 } },
+  vertexShader: `
+    varying vec3 vPos; varying vec3 vNormalWorld;
+    void main() { vPos = position; vNormalWorld = normalize(mat3(modelMatrix) * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
+  `,
+  fragmentShader: `
+    uniform float time; uniform vec3 lightDir; uniform float uMode; varying vec3 vPos; varying vec3 vNormalWorld;
+    float hash(vec3 p) { p = fract(p * 0.3183099 + .1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+    float noise(vec3 x) {
+      vec3 i = floor(x); vec3 f = fract(x); f = f * f * (3.0 - 2.0 * f);
+      return mix(mix(mix(hash(i+vec3(0,0,0)), hash(i+vec3(1,0,0)), f.x), mix(hash(i+vec3(0,1,0)), hash(i+vec3(1,1,0)), f.x), f.y),
+                 mix(mix(hash(i+vec3(0,0,1)), hash(i+vec3(1,0,1)), f.x), mix(hash(i+vec3(0,1,1)), hash(i+vec3(1,1,1)), f.x), f.y), f.z);
+    }
+    float fbm(vec3 p) { float f = 0.0; float amp = 0.5; for(int i=0; i<4; i++){ f += amp * noise(p); p *= 2.0; amp *= 0.5; } return f; }
+    void main() {
+      vec3 nPos = normalize(vPos); float lat = abs(nPos.y);
+      float band = smoothstep(0.78, 0.88, lat) * smoothstep(0.98, 0.90, lat);
+      if (band <= 0.0) discard;
+      vec3 p1 = vec3(nPos.x * 20.0, nPos.y * 5.0, nPos.z * 20.0); p1.x += time * 0.12; float n1 = fbm(p1);
+      vec3 p2 = vec3(nPos.x * 40.0, nPos.y * 10.0, nPos.z * 40.0); p2.z -= time * 0.22; float n2 = fbm(p2);
+      float cur = smoothstep(0.4, 0.75, n1 * n2 + n2 * 0.45);
+      float lDot = dot(normalize(vNormalWorld), normalize(lightDir));
+      float nightMask = mix(smoothstep(0.1, -0.2, lDot), 1.0, uMode);
+      vec3 color = mix(vec3(0.1, 1.0, 0.3), vec3(1.0, 0.2, 0.8), n1 * 1.5);
+      gl_FragColor = vec4(color, band * cur * nightMask * 0.95);
+    }
+  `,
+  transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.FrontSide
+});
+const auroraSphere = new THREE.Mesh(new THREE.SphereGeometry(1.02, 128, 128), auroraMaterial);
+earthGroup.add(auroraSphere);
+
+// ===== SYSTEM DOME =====
+const systemGroup = new THREE.Group();
+const dome = new THREE.Mesh(new THREE.SphereGeometry(0.0225, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x6fbaff }));
+systemGroup.add(dome);
+const domeGlow = new THREE.Mesh(new THREE.SphereGeometry(0.0275, 20, 20), new THREE.MeshBasicMaterial({ color: 0x4da6ff, transparent: true, opacity: 0.06 }));
+systemGroup.add(domeGlow);
+const systemRing = new THREE.Mesh(new THREE.RingGeometry(0.025, 0.036, 64), new THREE.MeshBasicMaterial({ color: 0x4da6ff, transparent: true, opacity: 0.95, side: THREE.DoubleSide }));
+systemRing.rotation.x = -Math.PI / 2;
+systemGroup.add(systemRing);
+scene.add(systemGroup);
+
+function createSystem(name = 'System'){
+  const g = new THREE.Group();
+  g.add(new THREE.Mesh(new THREE.SphereGeometry(0.0225, 32, 16, 0, Math.PI*2, 0, Math.PI/2), new THREE.MeshBasicMaterial({color:COLORS.defaultDome})));
+  g.add(new THREE.Mesh(new THREE.SphereGeometry(0.0275, 20, 20), new THREE.MeshBasicMaterial({color:COLORS.defaultGlow, transparent:true, opacity:0.06})));
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.025,0.036,64), new THREE.MeshBasicMaterial({color:COLORS.defaultRing, transparent:true, opacity:0.95, side:THREE.DoubleSide}));
+  ring.rotation.x = -Math.PI/2; g.add(ring);
+  return {g, dome: g.children[0], glow: g.children[1], ring, name, state: 'default'};
+}
+
+function getSystemColors(state) {
+  if (state === 'satisfied') {
+    return { dome: COLORS.satisfied, glow: COLORS.satisfied, ring: COLORS.defaultRing, pulse: COLORS.satisfied };
+  }
+  if (state === 'notSatisfied') {
+    return { dome: COLORS.notSatisfied, glow: COLORS.notSatisfied, ring: COLORS.defaultRing, pulse: COLORS.notSatisfied };
+  }
+  return { dome: COLORS.defaultDome, glow: COLORS.defaultGlow, ring: COLORS.defaultRing, pulse: COLORS.defaultPulse };
+}
+
+function applySystemColors(system) {
+  const colors = getSystemColors(system.state);
+  system.dome.material.color.setHex(colors.dome);
+  system.glow.material.color.setHex(colors.glow);
+  const isHighlighted =
+    (selectedSystem === system) ||
+    (selectedSystem === null && focusedSystem === system);
+  system.ring.material.color.setHex(isHighlighted ? COLORS.selectedRing : colors.ring);
+}
+
+function openInspectPanel(system) {
+  selectedSystem = system;
+  systemSelected = true;
+  exitHealthPanelMode();
+  inspectTitle.textContent = system.name;
+  inspectSubtitle.textContent = 'Set the system state.';
+  syncElevateButton();
+  inspectPanel.classList.add('visible');
+}
+
+function closeInspectPanel() {
+  selectedSystem = null;
+  systemSelected = false;
+
+  if (healthMode) {
+    inspectPanel.classList.remove('visible');
+    if (openFiltersBtn) openFiltersBtn.classList.add('visible');
+    return;
+  }
+
+  exitHealthPanelMode();
+  inspectPanel.classList.remove('visible');
+  if (openFiltersBtn) openFiltersBtn.classList.remove('visible');
+}
+
+function setSelectedSystemState(state) {
+  if (!selectedSystem) return;
+  selectedSystem.state = state;
+}
+
+const systemsData = [
+  {name:'Milan', lat:45.4642, lon:9.1900},
+  {name:'Charlotte', lat:35.2271, lon:-80.8431},
+  {name:'Portland', lat:45.5152, lon:-122.6784},
+  {name:'Pune', lat:18.5204, lon:73.8567},
+  {name:'Chandigarh', lat:30.7333, lon:76.7794},
+  {name:'Delhi', lat:28.6139, lon:77.2090},
+  {name:'Bozeman', lat:45.6770, lon:-111.0429},
+  {name:'Victoria', lat:48.4284, lon:-123.3656},
+  {name:'Manchester', lat:53.4808, lon:-2.2426},
+  {name:'Chicago', lat:41.8781, lon:-87.6298},
+  {name:'Sydney', lat:-33.8688, lon:151.2093},
+  {name:'Bangalore', lat:12.9716, lon:77.5946},
+  {name:'Chennai', lat:13.0827, lon:80.2707},
+  {name:'Singapore', lat:1.3521, lon:103.8198},
+  {name:'Amritsar', lat:31.6340, lon:74.8723},
+  {name:'Indore', lat:22.7196, lon:75.8577}
+];
+const extraSystems = systemsData.map(d=>{ const s = createSystem(d.name); scene.add(s.g); s.base = latLonToVec(d.lat, d.lon, 1.001); return s; });
+
+// ===== SYNCHRONIZED, BI-DIRECTIONAL ENERGY ARCS =====
+let globalMaxArcLength = 0;
+
+const arcShaderSource = {
+  uniforms: {
+    time: { value: 0 },
+    colorGoa: { value: new THREE.Color(0xffd700) }, // Gold
+    colorSys: { value: new THREE.Color(0xffd700) }, // Gold
+    isCore: { value: 1.0 },
+    arcLength: { value: 1.0 }, 
+    maxArcLength: { value: 1.0 } 
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    uniform float time;
+    uniform vec3 colorGoa;
+    uniform vec3 colorSys;
+    uniform float isCore;
+    uniform float arcLength;
+    uniform float maxArcLength;
+    varying vec2 vUv;
+
+    void main() {
+      float V = 0.15; 
+      float D_leg = maxArcLength + 0.5; 
+      float D_cycle = D_leg * 2.0; 
+      float d_total = time * V;
+      float d_mod = mod(d_total, D_cycle);
+      float isRev = step(D_leg, d_mod);
+      float head_pos = d_mod - isRev * D_leg;
+      float x_fwd = (1.0 - vUv.x) * arcLength; 
+      float x_rev = vUv.x * arcLength;         
+      float x_pixel = mix(x_fwd, x_rev, isRev);
+      float dBehind = head_pos - x_pixel;
+      float validMask = step(0.0, dBehind);
+      float L_tail = 0.45;
+      float L_head = 0.035;
+      float trail = smoothstep(L_tail, 0.0, dBehind) * validMask;
+      float head = smoothstep(L_head, 0.0, dBehind) * validMask;
+      float baseAlpha = isCore > 0.5 ? 0.25 : 0.06;
+      float pulseAlpha = trail * 0.6 + head * 1.0;
+      if (isCore < 0.5) pulseAlpha *= 0.5;
+
+      vec3 travelColor = mix(colorSys, colorGoa, isRev);
+      vec3 previousColor = mix(colorGoa, colorSys, isRev);
+      vec3 baseColor = mix(previousColor, travelColor, validMask);
+
+      vec3 goldColor = vec3(1.0, 0.843, 0.0);
+      float baseIsGold = 1.0 - smoothstep(0.05, 0.25, distance(baseColor, goldColor));
+      float baseBoost = 1.0 + (1.0 - baseIsGold) * 0.5;
+      baseColor = min(baseColor * baseBoost, vec3(1.0));
+
+      vec3 finalColor = baseColor + (travelColor * pulseAlpha * 2.0);
+      float outAlpha = (baseAlpha + pulseAlpha) * smoothstep(0.0, 0.05, vUv.x) * smoothstep(1.0, 0.95, vUv.x);
+      gl_FragColor = vec4(finalColor, outAlpha);
+    }
+  `
+};
+
+function createArcLine() {
+  const placeholderCurve = new THREE.QuadraticBezierCurve3(
+    new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0.2, 0), new THREE.Vector3(0.2, 0, 0)
+  );
+
+  const matCore = new THREE.ShaderMaterial({
+    uniforms: THREE.UniformsUtils.clone(arcShaderSource.uniforms),
+    vertexShader: arcShaderSource.vertexShader,
+    fragmentShader: arcShaderSource.fragmentShader,
+    transparent: true, blending: THREE.AdditiveBlending, depthWrite: false
+  });
+  matCore.uniforms.isCore.value = 1.0;
+
+  const matGlow = new THREE.ShaderMaterial({
+    uniforms: THREE.UniformsUtils.clone(arcShaderSource.uniforms),
+    vertexShader: arcShaderSource.vertexShader,
+    fragmentShader: arcShaderSource.fragmentShader,
+    transparent: true, blending: THREE.AdditiveBlending, depthWrite: false
+  });
+  matGlow.uniforms.isCore.value = 0.0;
+
+  const tubeCore = new THREE.Mesh(new THREE.TubeGeometry(placeholderCurve, 64, 0.0015, 8, false), matCore);
+  const tubeGlow = new THREE.Mesh(new THREE.TubeGeometry(placeholderCurve, 64, 0.0045, 8, false), matGlow);
+  
+  tubeCore.visible = false;
+  tubeGlow.visible = false;
+  
+  scene.add(tubeCore);
+  scene.add(tubeGlow);
+
+  return { tubeCore, tubeGlow };
+}
+
+
+function updateArcPositions(startVec, endVec, arcObj) {
+  const startLen = startVec.length();
+  const endLen = endVec.length();
+  const avgLen = (startLen + endLen) * 0.5;
+  const styleBlendRaw = THREE.MathUtils.clamp((avgLen - 1.03) / 0.10, 0, 1);
+  const styleBlend = styleBlendRaw * styleBlendRaw * (3.0 - 2.0 * styleBlendRaw);
+
+  const globeStart = startVec.clone().normalize().multiplyScalar(1.03);
+  const globeEnd = endVec.clone().normalize().multiplyScalar(1.03);
+  const globeMid = globeStart.clone().add(globeEnd).multiplyScalar(0.5).normalize();
+  const globeDistance = globeStart.distanceTo(globeEnd);
+  const globeLift = Math.min(1.4, 0.35 + globeDistance * 0.6);
+  const globeControl = globeMid.multiplyScalar(1.0 + globeLift);
+
+  const spaceStart = startVec.clone();
+  const spaceEnd = endVec.clone();
+  const spaceMid = spaceStart.clone().add(spaceEnd).multiplyScalar(0.5);
+  const spaceDistance = spaceStart.distanceTo(spaceEnd);
+  const spaceMidRadius = spaceMid.length();
+  const spaceLift = Math.min(0.55, 0.12 + spaceDistance * 0.22);
+  const spaceControl = spaceMid.clone().normalize().multiplyScalar(spaceMidRadius + spaceLift);
+
+  const start = globeStart.clone().lerp(spaceStart, styleBlend);
+  const end = globeEnd.clone().lerp(spaceEnd, styleBlend);
+  const control = globeControl.clone().lerp(spaceControl, styleBlend);
+
+  const curve = new THREE.QuadraticBezierCurve3(start, control, end);
+  const trueArcLength = curve.getLength();
+  
+  if (trueArcLength > globalMaxArcLength) {
+      globalMaxArcLength = trueArcLength;
+  }
+
+  arcObj.tubeCore.material.uniforms.arcLength.value = trueArcLength;
+  arcObj.tubeGlow.material.uniforms.arcLength.value = trueArcLength;
+  arcObj.tubeCore.material.uniforms.maxArcLength.value = globalMaxArcLength;
+  arcObj.tubeGlow.material.uniforms.maxArcLength.value = globalMaxArcLength;
+
+  if (arcObj.tubeCore.geometry) arcObj.tubeCore.geometry.dispose();
+  if (arcObj.tubeGlow.geometry) arcObj.tubeGlow.geometry.dispose();
+  
+  arcObj.tubeCore.geometry = new THREE.TubeGeometry(curve, 64, 0.0015, 8, false);
+  arcObj.tubeGlow.geometry = new THREE.TubeGeometry(curve, 64, 0.0045, 8, false);
+}
+
+// ===== UI & STATE =====
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+
+function projectPointer(event) {
+  const rect = canvas.getBoundingClientRect();
+  pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+}
+
+const primarySystem = {
+  g: systemGroup,
+  dome,
+  glow: domeGlow,
+  ring: systemRing,
+  name: 'Goa',
+  state: 'default'
+};
+const clickableSystems = [primarySystem, ...extraSystems];
+const connectionPool = Array.from({ length: clickableSystems.length - 1 }, () => createArcLine());
+let focusedSystem = primarySystem;
+
+satisfiedBtn.addEventListener('click', () => setSelectedSystemState('satisfied'));
+notSatisfiedBtn.addEventListener('click', () => setSelectedSystemState('notSatisfied'));
+focusEnergyBtn.addEventListener('click', () => {
+  if (!selectedSystem) return;
+  if (!connectionsMode) enableConnectionsMode();
+  if (elevatedMode && focusedSystem !== selectedSystem) {
+    startFormationRetarget(selectedSystem);
+  } else {
+    focusedSystem = selectedSystem;
+  }
+});
+elevateBtn.addEventListener('click', () => {
+  if (!selectedSystem) return;
+  if (elevatedMode && focusedSystem === selectedSystem) {
+    resetElevation();
+  } else if (elevatedMode) {
+    startFormationRetarget(selectedSystem);
+  } else {
+    focusedSystem = selectedSystem;
+    elevatedMode = true;
+    elevateTransitionActive = true;
+    autoPanDelay = 0.0;
+  }
+  syncElevateButton();
+});
+closeInspectBtn.addEventListener('click', closeInspectPanel);
+openFiltersBtn.addEventListener('click', () => {
+  if (!healthMode) return;
+  inspectPanel.classList.add('visible');
+  openFiltersBtn.classList.remove('visible');
+});
+healthPositiveBtn.addEventListener('click', () => {
+  if (healthOnlyPositive) {
+    healthOnlyPositive = false;
+  } else {
+    healthOnlyPositive = true;
+    healthOnlyNegative = false;
+  }
+  updateHealthFilterButtons();
+  updateHealthPillarVisibility();
+});
+
+healthNegativeBtn.addEventListener('click', () => {
+  if (healthOnlyNegative) {
+    healthOnlyNegative = false;
+  } else {
+    healthOnlyNegative = true;
+    healthOnlyPositive = false;
+  }
+  updateHealthFilterButtons();
+  updateHealthPillarVisibility();
+});
+
+// ===== LOCATION =====
+const lat = 15.5588;
+const lon = 73.7700;
+
+function latLonToVec(lat, lon, r) {
+  const phi = (90 - lat) * Math.PI / 180;
+  const theta = (lon + 180) * Math.PI / 180;
+  return new THREE.Vector3(
+    -r * Math.sin(phi) * Math.cos(theta), r * Math.cos(phi), r * Math.sin(phi) * Math.sin(theta)
+  );
+}
+
+function quadraticBezierVec3(p0, p1, p2, t) {
+  const omt = 1.0 - t;
+  return p0.clone().multiplyScalar(omt * omt)
+    .add(p1.clone().multiplyScalar(2.0 * omt * t))
+    .add(p2.clone().multiplyScalar(t * t));
+}
+
+function smoothstep01(x) {
+  const t = Math.max(0.0, Math.min(1.0, x));
+  return t * t * (3.0 - 2.0 * t);
+}
+
+function computeStagedOrbitPosition(earthPos, surfaceNormal, targetPos, blend) {
+  const stageSplit = 0.5;
+  const orbitLift = 0.28;
+  const launchPoint = earthPos.clone().add(surfaceNormal.clone().multiplyScalar(orbitLift));
+
+  if (blend <= stageSplit) {
+    const t = smoothstep01(blend / stageSplit);
+    return earthPos.clone().lerp(launchPoint, t);
+  }
+
+  const t = smoothstep01((blend - stageSplit) / (1.0 - stageSplit));
+  const spaceMid = launchPoint.clone().add(targetPos).multiplyScalar(0.5);
+  const midNormal = spaceMid.clone().normalize();
+  const control = midNormal.multiplyScalar(Math.max(launchPoint.length(), targetPos.length()) + 0.18)
+    .add(new THREE.Vector3(0, 0.06, 0));
+  return quadraticBezierVec3(launchPoint, control, targetPos, t);
+}
+
+function getLocalBasis(normal) {
+  const reference = Math.abs(normal.y) < 0.95
+    ? new THREE.Vector3(0, 1, 0)
+    : new THREE.Vector3(1, 0, 0);
+  const tangentA = new THREE.Vector3().crossVectors(reference, normal).normalize();
+  const tangentB = new THREE.Vector3().crossVectors(normal, tangentA).normalize();
+  return { tangentA, tangentB };
+}
+
+function getElevatedLayoutTargets(focusSystem) {
+  const center = new THREE.Vector3(0, 1.09, 0);
+  const ringAxisA = new THREE.Vector3(1, 0, 0);
+  const ringAxisB = new THREE.Vector3(0, 0, 1);
+  const others = clickableSystems.filter(system => system !== focusSystem);
+  const ringRadius = 0.42;
+  const focusLift = new THREE.Vector3(0, 0.04, 0);
+  const targets = new Map();
+
+  targets.set(focusSystem, {
+    position: center.clone().add(focusLift),
+    anchor: center.clone().add(focusLift),
+    outward: new THREE.Vector3(0, 1, 0)
+  });
+
+  others.forEach((system, idx) => {
+    const angle = (idx / Math.max(1, others.length)) * Math.PI * 2 - Math.PI / 2;
+    const circularOffset = ringAxisA.clone().multiplyScalar(Math.cos(angle) * ringRadius)
+      .add(ringAxisB.clone().multiplyScalar(Math.sin(angle) * ringRadius));
+    const elevatedPos = center.clone().add(circularOffset);
+    const outward = elevatedPos.clone().sub(center).normalize().lerp(new THREE.Vector3(0, 1, 0), 0.35).normalize();
+    targets.set(system, {
+      position: elevatedPos,
+      anchor: elevatedPos.clone(),
+      outward
+    });
+  });
+
+  return targets;
+}
+const base = latLonToVec(lat, lon, 1.001);
+const domeHeight = 0.02;
+
+
+// ===== CURRENT EARTH ROTATION FROM REAL UTC =====
+function currentUtcFraction() {
+  const now = new Date();
+  return (now.getUTCHours() + now.getUTCMinutes() / 60 + now.getUTCSeconds() / 3600) / 24;
+}
+
+function updateEarthSpin() {
+  earthGroup.rotation.y = (currentUtcFraction() * Math.PI * 2) - Math.PI;
+}
+
+
+let selectedPillar = null;
+const HEALTH_FOCUS_DIM_OPACITY = 0.22;
+const HEALTH_FOCUS_FULL_OPACITY = 0.96;
+const selectedPillarOverlayGroup = new THREE.Group();
+selectedPillarOverlayGroup.visible = false;
+selectedPillarOverlayGroup.renderOrder = 1000;
+earthGroup.add(selectedPillarOverlayGroup);
+const tooltip = document.getElementById('pillarTooltip');
+
+const pillarRing = new THREE.Mesh(
+  new THREE.RingGeometry(0.015, 0.025, 64),
+  new THREE.MeshBasicMaterial({ color: 0xffd700, side: THREE.DoubleSide, transparent: true, opacity: 0.98 })
+);
+pillarRing.rotation.x = -Math.PI / 2;
+pillarRing.visible = false;
+earthGroup.add(pillarRing);
+
+function healthSegmentColor(segmentType) {
+  return segmentType === 'positive' ? 0x16a34a : 0xdc2626;
+}
+
+function clearSelectedPillarOverlay() {
+  while (selectedPillarOverlayGroup.children.length) {
+    const child = selectedPillarOverlayGroup.children.pop();
+    if (child.geometry && child.geometry !== basePillarGeometry) child.geometry.dispose();
+    if (child.material) child.material.dispose();
+  }
+  selectedPillarOverlayGroup.visible = false;
+}
+
+function findSelectedPillarSegments(pillarId) {
+  const matches = [];
+  const sources = [greenInstances, redInstances].filter(Boolean);
+
+  for (const source of sources) {
+    const metas = source.userData.metas || [];
+    for (let i = 0; i < metas.length; i++) {
+      if (metas[i].pillarId === pillarId) {
+        matches.push({ source, instanceId: i, meta: metas[i] });
+      }
+    }
+  }
+
+  return matches;
+}
+
+function buildSelectedPillarOverlay(pillarId) {
+  clearSelectedPillarOverlay();
+  if (!pillarId) return;
+
+  const matches = findSelectedPillarSegments(pillarId);
+  const matrix = new THREE.Matrix4();
+
+  for (const match of matches) {
+    // Respect active positive/negative filters.
+    if (healthOnlyPositive && match.meta.segmentType !== 'positive') continue;
+    if (healthOnlyNegative && match.meta.segmentType !== 'negative') continue;
+
+    match.source.getMatrixAt(match.instanceId, matrix);
+
+    const overlay = new THREE.Mesh(
+      basePillarGeometry,
+      new THREE.MeshBasicMaterial({
+  color: healthSegmentColor(match.meta.segmentType),
+  transparent: true,
+  opacity: HEALTH_FOCUS_FULL_OPACITY,
+
+  // 👇 CRITICAL FIXES
+  depthTest: true,
+  depthWrite: true,
+
+  // prevents visual "doubling" / shimmer
+  polygonOffset: true,
+  polygonOffsetFactor: -1,
+  polygonOffsetUnits: -1
+})
+    );
+
+    overlay.matrixAutoUpdate = false;
+    overlay.matrix.copy(matrix);
+    overlay.renderOrder = 1001;
+    selectedPillarOverlayGroup.add(overlay);
+  }
+
+  selectedPillarOverlayGroup.visible = selectedPillarOverlayGroup.children.length > 0;
+}
+
+function setHealthInstanceOpacity(opacity) {
+  if (greenInstances) greenInstances.material.opacity = opacity;
+  if (redInstances) redInstances.material.opacity = opacity;
+}
+
+function updatePillarSelectionFade() {
+  if (!healthMode || !selectedPillar) {
+    setHealthInstanceOpacity(HEALTH_FOCUS_FULL_OPACITY);
+    clearSelectedPillarOverlay();
+    return;
+  }
+
+  // Fade the field while preserving the selected pillar at normal brightness.
+  // No pulse/glow/scale is applied to the pillar itself.
+  setHealthInstanceOpacity(HEALTH_FOCUS_DIM_OPACITY);
+  buildSelectedPillarOverlay(selectedPillar);
+}
+
+function showTooltip(meta, x, y) {
+  const city = meta.placeLabel || meta.city || meta.cityAscii || meta.adminName || approxCityName(meta.lat, meta.lng);
+  const greenPct = Math.round((meta.greenShare || 0) * 100);
+  const redPct = Math.max(0, 100 - greenPct);
+
+  tooltip.innerHTML = `
+    <button class="pillarTooltipClose" id="pillarTooltipCloseBtn" aria-label="Close info card">×</button>
+    <div style="display:flex;flex-direction:column;gap:9px;padding-right:18px;">
+      <div style="font-size:17px;font-weight:700;color:#ffffff;line-height:1.15;">
+        ${city}
+      </div>
+
+      <div style="font-size:11px;color:#bcd0f5;">
+        ${meta.lat.toFixed(4)}, ${meta.lng.toFixed(4)}
+      </div>
+
+      <div style="height:1px;background:linear-gradient(90deg, rgba(255,255,255,.16), rgba(255,255,255,.04));margin:2px 0;"></div>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-size:11px;color:#9fb3d9;">Population</span>
+        <span style="font-size:13px;font-weight:650;color:#eef4ff;">${Math.round(meta.pop).toLocaleString()}</span>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:2px;">
+        <span style="font-size:11px;color:#9fb3d9;">Sentiment</span>
+        <span style="font-size:10px;color:#d9e5ff;">Positive / Negative</span>
+      </div>
+
+      <div style="height:11px;width:100%;background:rgba(255,255,255,.075);border:1px solid rgba(255,255,255,.055);border-radius:999px;overflow:hidden;box-shadow:inset 0 0 12px rgba(0,0,0,.22);">
+        <div id="tooltipGreenBar" style="height:100%;width:0%;background:linear-gradient(90deg,#16a34a,#34d399);float:left;transition:width 320ms ease;"></div>
+        <div id="tooltipRedBar" style="height:100%;width:0%;background:linear-gradient(90deg,#dc2626,#fb7185);float:left;transition:width 320ms ease;"></div>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;font-size:10px;">
+        <span style="color:#86efac;">Positive ${greenPct}%</span>
+        <span style="color:#fca5a5;">Negative ${redPct}%</span>
+      </div>
+    </div>
+  `;
+
+  tooltip.style.display = 'block';
+  tooltip.style.left = Math.min(window.innerWidth - 260, x + 14) + 'px';
+  tooltip.style.top = Math.min(window.innerHeight - 190, y + 14) + 'px';
+
+  requestAnimationFrame(() => {
+    const greenBar = document.getElementById('tooltipGreenBar');
+    const redBar = document.getElementById('tooltipRedBar');
+    if (greenBar) greenBar.style.width = greenPct + '%';
+    if (redBar) redBar.style.width = redPct + '%';
+  });
+
+  const closeBtn = document.getElementById('pillarTooltipCloseBtn');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      clearSelection();
+    });
+  }
+}
+
+function clearSelection() {
+  selectedPillar = null;
+  pillarRing.visible = false;
+  tooltip.style.display = 'none';
+  updatePillarSelectionFade();
+}
+
+function selectPillarFromInstance(mesh, instanceId, x, y) {
+  const meta = (mesh.userData.metas || [])[instanceId];
+  if (!meta) return;
+
+  selectedPillar = meta.pillarId;
+
+  const matches = findSelectedPillarSegments(selectedPillar);
+  let topPosition = meta.topPosition;
+  for (const match of matches) {
+    if (!topPosition || match.meta.topPosition.lengthSq() > topPosition.lengthSq()) {
+      topPosition = match.meta.topPosition;
+    }
+  }
+
+  const radius = Math.max(0.012, (meta.radius || 0.008) * 1.9);
+  if (pillarRing.geometry) pillarRing.geometry.dispose();
+  pillarRing.geometry = new THREE.RingGeometry(radius, radius + 0.006, 64);
+
+  pillarRing.position.copy(topPosition);
+  pillarRing.lookAt(new THREE.Vector3(0, 0, 0));
+  pillarRing.visible = true;
+
+  updatePillarSelectionFade();
+  showTooltip(meta, x, y);
+}
+
+// ===== INTERACTION =====
+let dragging = false, lastX = 0, lastY = 0, pointerMoved = false;
+
+canvas.addEventListener('pointerdown', (e) => {
+  if (!elevatedMode && elevateTransitionActive) {
+    elevateTransitionActive = false;
+  }
+  dragging = true; pointerMoved = false; lastX = e.clientX; lastY = e.clientY;
+});
+canvas.addEventListener('pointermove', (e) => {
+  if (!dragging) return;
+  const dx = e.clientX - lastX, dy = e.clientY - lastY;
+  if (Math.abs(dx) > 2 || Math.abs(dy) > 2) pointerMoved = true;
+  orbit.theta -= dx * 0.005; orbit.phi += dy * 0.004; orbit.phi = Math.max(-1.25, Math.min(1.25, orbit.phi));
+  lastX = e.clientX; lastY = e.clientY;
+  updateCamera();
+});
+canvas.addEventListener('pointerup', (e) => {
+  // Systems should only be clickable in Show Energy mode.
+  // In Show Health mode, pillar clicks are handled by the separate health click handler.
+  if (!pointerMoved && connectionsMode && !healthMode) {
+    projectPointer(e);
+    raycaster.setFromCamera(pointer, camera);
+    const intersectedSystem = clickableSystems.find(system => raycaster.intersectObject(system.dome, false).length);
+    if (intersectedSystem) {
+      openInspectPanel(intersectedSystem);
+    } else if (!inspectPanel.contains(e.target)) {
+      closeInspectPanel();
+    }
+  }
+  dragging = false;
+});
+canvas.addEventListener('pointerleave', () => dragging = false);
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault(); orbit.radius += e.deltaY * 0.001; orbit.radius = Math.max(1.6, Math.min(5, orbit.radius)); updateCamera();
+}, { passive: false });
+
+window.addEventListener('resize', () => {
+  renderer.setSize(window.innerWidth, window.innerHeight); camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix(); updateCamera();
+});
+
+
+canvas.addEventListener('click', (e) => {
+  if (!healthMode) return;
+
+  projectPointer(e);
+  raycaster.setFromCamera(pointer, camera);
+  const targets = [greenInstances, redInstances].filter(mesh => mesh && mesh.visible);
+  const intersects = raycaster.intersectObjects(targets, false);
+
+  if (intersects.length > 0 && intersects[0].instanceId !== undefined) {
+    selectPillarFromInstance(intersects[0].object, intersects[0].instanceId, e.clientX, e.clientY);
+  } else {
+    clearSelection();
+  }
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeInspectPanel();
+});
+
+
+pillarHeightRangeMin.addEventListener('input', handlePillarHeightRangeInput);
+pillarHeightRangeMax.addEventListener('input', handlePillarHeightRangeInput);
+updatePillarHeightRangeUI();
+
+// ===== ANIMATION =====
+let t = 0;
+function animate() {
+  requestAnimationFrame(animate);
+  updateEarthSpin();
+
+  nightMaterial.uniforms.lightDir.value.copy(sun.position).normalize();
+  atmosphereMaterial.uniforms.lightDir.value.copy(sun.position).normalize();
+  auroraMaterial.uniforms.lightDir.value.copy(sun.position).normalize();
+  auroraMaterial.uniforms.time.value = t;
+
+  const isConn = connectionsMode;
+  
+  // Keep Energy mode cinematic, but make Health mode surface more readable.
+  const targetMode = isConn ? 1.0 : (healthMode ? 0.69 : 0.0);
+  nightMaterial.uniforms.uMode.value += (targetMode - nightMaterial.uniforms.uMode.value) * 0.1;
+  auroraMaterial.uniforms.uMode.value = nightMaterial.uniforms.uMode.value;
+
+  updateHealthPillarVisibility();
+  if (!healthMode) {
+    if (pillarRing) pillarRing.visible = false;
+    if (tooltip) tooltip.style.display = 'none';
+    selectedPillar = null;
+  }
+
+  const elevateBlendRate = elevatedMode ? 0.01 : 0.005;
+  elevateBlend += ((elevatedMode ? 1.0 : 0.0) - elevateBlend) * elevateBlendRate;
+  const easedElevateBlend = elevateBlend * elevateBlend * (3.0 - 2.0 * elevateBlend);
+
+  if (elevateTransitionActive && elevatedMode) {
+    autoPanDelay = Math.min(1.0, autoPanDelay + 0.01);
+    const delayedPanBlend = Math.max(0.0, Math.min(1.0, (autoPanDelay - 0.16) / 0.58));
+    const easedPanBlend = delayedPanBlend * delayedPanBlend * (3.0 - 2.0 * delayedPanBlend);
+    const targetPhi = 1.25;
+    orbit.phi += (targetPhi - orbit.phi) * (0.006 * easedPanBlend);
+    updateCamera();
+    if (elevateBlend > 0.985) {
+      elevateTransitionActive = false;
+    }
+  }
+
+  clickableSystems.forEach(system => {
+    const surface = system === primarySystem
+      ? base.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), earthGroup.rotation.y)
+      : system.base.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), earthGroup.rotation.y);
+    const outward = surface.clone().normalize();
+    const pos = surface.clone().add(outward.clone().multiplyScalar(domeHeight));
+    const anchor = outward.clone().multiplyScalar(1.03);
+
+    system.surfacePosition = surface;
+    system.surfaceNormal = outward;
+    system.earthPosition = pos;
+    system.earthAnchor = anchor;
+  });
+
+  const elevatedTargets = getElevatedLayoutTargets(focusedSystem);
+
+  if (formationRetargetActive) {
+    formationRetargetBlend = Math.min(1.0, formationRetargetBlend + 0.0175);
+    if (formationRetargetBlend >= 0.999) {
+      formationRetargetActive = false;
+      formationRetargetBlend = 1.0;
+      formationRetargetStarts.clear();
+    }
+  }
+
+  clickableSystems.forEach(system => {
+    const target = elevatedTargets.get(system);
+    let currentPos;
+    let currentAnchor;
+    let currentOutward;
+
+    if (elevatedMode && formationRetargetActive && formationRetargetStarts.has(system)) {
+      const retargetEase = formationRetargetBlend * formationRetargetBlend * (3.0 - 2.0 * formationRetargetBlend);
+      const start = formationRetargetStarts.get(system);
+      currentPos = start.position.clone().lerp(target.position, retargetEase);
+      currentAnchor = start.anchor.clone().lerp(target.anchor, retargetEase);
+      currentOutward = start.outward.clone().lerp(target.outward, retargetEase).normalize();
+    } else {
+      currentPos = computeStagedOrbitPosition(system.earthPosition, system.surfaceNormal, target.position, easedElevateBlend);
+      currentAnchor = computeStagedOrbitPosition(system.earthAnchor, system.surfaceNormal, target.anchor, easedElevateBlend);
+      currentOutward = system.surfaceNormal.clone().lerp(target.outward, easedElevateBlend).normalize();
+    }
+
+    system.g.position.copy(currentPos);
+    system.g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), currentOutward);
+    applySystemColors(system);
+    const isHighlighted =
+      (selectedSystem === system) ||
+      (selectedSystem === null && focusedSystem === system);
+    const pulseWave = isHighlighted ? (0.5 + 0.5 * Math.sin(t * 1.8)) : (0.5 + 0.5 * Math.sin(t));
+    const domeScale = isHighlighted ? (1.0 + pulseWave * 0.055) : (1.0 + Math.sin(t) * 0.02);
+    const glowScale = isHighlighted ? (1.02 + pulseWave * 0.095) : (1.0 + Math.sin(t) * 0.02);
+    system.dome.scale.setScalar(domeScale);
+    system.glow.scale.setScalar(glowScale);
+    system.glow.material.opacity = isHighlighted ? (0.09 + pulseWave * 0.08) : 0.06;
+    system.currentPosition = currentPos;
+    system.currentAnchor = currentAnchor;
+    system.currentOutward = currentOutward;
+    system.g.visible = !healthMode;
+  });
+
+
+  if (elevateTransitionActive && !elevatedMode) {
+    const focusViewDir = focusedSystem.earthPosition.clone().normalize();
+    const targetPhi = Math.max(-1.25, Math.min(1.25, Math.asin(focusViewDir.y)));
+    const targetTheta = Math.atan2(focusViewDir.x, focusViewDir.z);
+    orbit.radius += (descendCameraRadius - orbit.radius) * 0.04;
+    orbit.phi += (targetPhi - orbit.phi) * 0.015;
+    orbit.theta = lerpAngle(orbit.theta, targetTheta, 0.015);
+    updateCamera();
+    if (elevateBlend < 0.05) {
+      elevateTransitionActive = false;
+    }
+  }
+
+  const others = clickableSystems.filter(system => system !== focusedSystem);
+  const focusColors = getSystemColors(focusedSystem.state);
+
+  connectionPool.forEach((arc, idx) => {
+    const targetSystem = others[idx];
+    const showArc = isConn && !!targetSystem;
+    arc.tubeCore.visible = showArc;
+    arc.tubeGlow.visible = showArc;
+
+    if (!showArc) return;
+
+    updateArcPositions(focusedSystem.currentAnchor, targetSystem.currentAnchor, arc);
+
+    const targetColors = getSystemColors(targetSystem.state);
+    arc.tubeCore.material.uniforms.colorGoa.value.setHex(focusColors.pulse);
+    arc.tubeGlow.material.uniforms.colorGoa.value.setHex(focusColors.pulse);
+    arc.tubeCore.material.uniforms.colorSys.value.setHex(targetColors.pulse);
+    arc.tubeGlow.material.uniforms.colorSys.value.setHex(targetColors.pulse);
+
+    if (showArc) {
+      arc.tubeCore.material.uniforms.time.value = t;
+      arc.tubeGlow.material.uniforms.time.value = t;
+    }
+  });
+
+  t += 0.04;
+
+  const sunPulse = 1 + Math.sin(t * 0.55) * 0.035;
+  sunGlow.scale.set(1.28 * sunPulse, 1.28 * sunPulse, 1);
+  raysGroup.rotation.z += 0.0008;
+
+  if (pillarRing && pillarRing.visible) {
+    const ringPulse = 1.0 + Math.sin(t * 2.2) * 0.055;
+    pillarRing.scale.set(ringPulse, ringPulse, ringPulse);
+    pillarRing.material.opacity = 0.78 + (0.5 + 0.5 * Math.sin(t * 2.2)) * 0.22;
+  } else if (pillarRing) {
+    pillarRing.scale.set(1, 1, 1);
+  }
+
+  if (moon) orientMoonTowardEarth(moon);
+
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>
