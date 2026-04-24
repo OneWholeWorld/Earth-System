@@ -135,6 +135,148 @@ body:not(.health-panel-mode) #healthNegativeBtn{
   border-color:#dc2626;
 }
 
+/* Pillar height percentile range control */
+body:not(.health-panel-mode) #pillarHeightRangeControl{
+  display:none !important;
+}
+
+#pillarHeightRangeControl{
+  margin-top:10px;
+  padding:12px;
+  border-radius:12px;
+  background:rgba(255,255,255,.045);
+  border:1px solid rgba(255,255,255,.08);
+}
+
+#pillarHeightRangeTitle{
+  font-size:11px;
+  color:#bcd0f5;
+  margin-bottom:8px;
+}
+
+#pillarHeightRangeReadout{
+  font-size:11px;
+  color:#eef4ff;
+  margin-top:8px;
+}
+
+#pillarHeightRangeCount{
+  font-size:10px;
+  color:#9fb3d9;
+  margin-top:3px;
+}
+
+#pillarHeightSliderWrap{
+  position:relative;
+  height:28px;
+}
+
+#pillarHeightSliderTrack{
+  position:absolute;
+  left:0;
+  right:0;
+  top:13px;
+  height:4px;
+  border-radius:999px;
+  background:rgba(255,255,255,.16);
+  overflow:hidden;
+}
+
+#pillarHeightSliderFill{
+  position:absolute;
+  top:0;
+  height:100%;
+  border-radius:999px;
+  background:linear-gradient(90deg, rgba(250,204,21,.95), rgba(255,255,255,.82));
+}
+
+.pillarHeightRangeInput{
+  position:absolute;
+  left:0;
+  top:4px;
+  width:100%;
+  margin:0;
+  appearance:none;
+  -webkit-appearance:none;
+  background:transparent;
+  pointer-events:none;
+}
+
+.pillarHeightRangeInput::-webkit-slider-thumb{
+  appearance:none;
+  -webkit-appearance:none;
+  pointer-events:auto;
+  width:16px;
+  height:16px;
+  border-radius:50%;
+  background:#facc15;
+  border:2px solid rgba(8,12,24,.92);
+  box-shadow:0 0 0 2px rgba(250,204,21,.25), 0 4px 12px rgba(0,0,0,.35);
+  cursor:pointer;
+}
+
+.pillarHeightRangeInput::-moz-range-thumb{
+  pointer-events:auto;
+  width:16px;
+  height:16px;
+  border-radius:50%;
+  background:#facc15;
+  border:2px solid rgba(8,12,24,.92);
+  box-shadow:0 0 0 2px rgba(250,204,21,.25), 0 4px 12px rgba(0,0,0,.35);
+  cursor:pointer;
+}
+
+.pillarHeightRangeInput::-webkit-slider-runnable-track{
+  background:transparent;
+}
+
+.pillarHeightRangeInput::-moz-range-track{
+  background:transparent;
+}
+
+#openFiltersBtn{
+  position:fixed;
+  top:16px;
+  right:16px;
+  z-index:19;
+  width:42px;
+  height:42px;
+  border:none;
+  border-radius:999px;
+  background:rgba(8,12,24,.72);
+  backdrop-filter:blur(12px);
+  border:1px solid rgba(255,255,255,.14);
+  color:#eef4ff;
+  cursor:pointer;
+  font:700 18px/1 Inter,system-ui,sans-serif;
+  display:none;
+  box-shadow:0 12px 34px rgba(0,0,0,.30);
+}
+#openFiltersBtn:hover{
+  background:rgba(255,255,255,.14);
+}
+body.health-panel-mode #openFiltersBtn.visible{
+  display:block;
+}
+
+.pillarTooltipClose{
+  position:absolute;
+  top:7px;
+  right:8px;
+  width:22px;
+  height:22px;
+  border:none;
+  border-radius:999px;
+  background:rgba(255,255,255,.10);
+  color:#eef4ff;
+  cursor:pointer;
+  font:700 14px/1 Inter,system-ui,sans-serif;
+  pointer-events:auto;
+}
+.pillarTooltipClose:hover{
+  background:rgba(255,255,255,.20);
+}
+
 </style>
 </head>
 <body>
@@ -155,14 +297,27 @@ body:not(.health-panel-mode) #healthNegativeBtn{
     <button id="elevateBtn">Ascend</button>
     <button id="healthPositiveBtn">Show Only Positive</button>
     <button id="healthNegativeBtn">Show Only Negative</button>
+    <div id="pillarHeightRangeControl">
+      <div id="pillarHeightRangeTitle">Column Height Range</div>
+      <div id="pillarHeightSliderWrap">
+        <div id="pillarHeightSliderTrack">
+          <div id="pillarHeightSliderFill"></div>
+        </div>
+        <input id="pillarHeightRangeMin" class="pillarHeightRangeInput" type="range" min="0" max="100" value="0" step="1">
+        <input id="pillarHeightRangeMax" class="pillarHeightRangeInput" type="range" min="0" max="100" value="100" step="1">
+      </div>
+      <div id="pillarHeightRangeReadout">Showing 0th – 100th percentile height</div>
+      <div id="pillarHeightRangeCount">All columns</div>
+    </div>
   </div>
 </div>
+<button id="openFiltersBtn" title="Open filters" aria-label="Open filters">☰</button>
 
 <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
 
 <div id="pillarTooltip" style="
 position:fixed;
-pointer-events:none;
+pointer-events:auto;
 background:rgba(8,12,24,.92);
 border:1px solid rgba(255,255,255,.15);
 border-radius:16px;
@@ -219,6 +374,12 @@ const showConnectionsBtn = document.getElementById('showConnectionsBtn');
 const showHealthBtn = document.getElementById('showHealthBtn');
 const healthPositiveBtn = document.getElementById('healthPositiveBtn');
 const healthNegativeBtn = document.getElementById('healthNegativeBtn');
+const openFiltersBtn = document.getElementById('openFiltersBtn');
+const pillarHeightRangeMin = document.getElementById('pillarHeightRangeMin');
+const pillarHeightRangeMax = document.getElementById('pillarHeightRangeMax');
+const pillarHeightSliderFill = document.getElementById('pillarHeightSliderFill');
+const pillarHeightRangeReadout = document.getElementById('pillarHeightRangeReadout');
+const pillarHeightRangeCount = document.getElementById('pillarHeightRangeCount');
 
 const COLORS = {
   defaultDome: 0x6fbaff,
@@ -236,6 +397,10 @@ let connectionsMode = false;
 let healthMode = false;
 let healthOnlyPositive = false;
 let healthOnlyNegative = false;
+let pillarHeightPercentMin = 0;
+let pillarHeightPercentMax = 100;
+let fullPopulationDataset = [];
+let fullPopulationMaxPop = 0;
 let elevatedMode = false;
 let elevateBlend = 0.0;
 let elevateTransitionActive = false;
@@ -298,13 +463,15 @@ function startFormationRetarget(newFocusSystem) {
 function enterHealthPanelMode() {
   document.body.classList.add('health-panel-mode');
   inspectTitle.textContent = 'Health Filters';
-  inspectSubtitle.textContent = 'Filter positive and negative responses.';
+  inspectSubtitle.textContent = 'Filter positive, negative, and pillar height.';
   updateHealthFilterButtons();
   inspectPanel.classList.add('visible');
+  if (openFiltersBtn) openFiltersBtn.classList.remove('visible');
 }
 
 function exitHealthPanelMode() {
   document.body.classList.remove('health-panel-mode');
+  if (openFiltersBtn) openFiltersBtn.classList.remove('visible');
 }
 
 function updateHealthFilterButtons() {
@@ -1495,7 +1662,7 @@ function rebuildHealthPillars(data) {
 
   if (!data.length) return;
 
-  const maxPop = Math.max(...data.map(d => d.pop));
+  const maxPop = fullPopulationMaxPop || Math.max(...data.map(d => d.pop));
   const totalPop = data.reduce((sum, d) => sum + d.pop, 0);
 
   const rawShares = data.map(d => clusteredGreenShare(d.lat, d.lng));
@@ -1577,6 +1744,82 @@ function updateHealthPillarVisibility() {
   }
 }
 
+
+function pillarHeightPercentile(d) {
+  if (!fullPopulationMaxPop || !d || !Number.isFinite(d.pop)) return 0;
+  const popNorm = Math.sqrt(d.pop / fullPopulationMaxPop);
+  const totalHeight = 0.01 + popNorm * 0.24;
+
+  // This matches the exact height formula used by rebuildHealthPillars.
+  const minHeight = 0.01;
+  const maxHeight = 0.25;
+
+  return clamp01((totalHeight - minHeight) / (maxHeight - minHeight)) * 100;
+}
+
+function clampPillarHeightHandles() {
+  pillarHeightPercentMin = Math.max(0, Math.min(100, Number(pillarHeightRangeMin.value)));
+  pillarHeightPercentMax = Math.max(0, Math.min(100, Number(pillarHeightRangeMax.value)));
+
+  if (pillarHeightPercentMin >= pillarHeightPercentMax) {
+    const active = document.activeElement;
+    if (active === pillarHeightRangeMin) {
+      pillarHeightPercentMin = pillarHeightPercentMax - 1;
+      pillarHeightRangeMin.value = pillarHeightPercentMin;
+    } else {
+      pillarHeightPercentMax = pillarHeightPercentMin + 1;
+      pillarHeightRangeMax.value = pillarHeightPercentMax;
+    }
+  }
+}
+
+function filteredPopulationByHeightPercentile() {
+  if (!fullPopulationDataset.length) return [];
+
+  return fullPopulationDataset.filter(d => {
+    const p = pillarHeightPercentile(d);
+    return p >= pillarHeightPercentMin && p <= pillarHeightPercentMax;
+  });
+}
+
+function updatePillarHeightRangeUI(filteredCount = null) {
+  if (pillarHeightSliderFill) {
+    pillarHeightSliderFill.style.left = `${pillarHeightPercentMin}%`;
+    pillarHeightSliderFill.style.width = `${pillarHeightPercentMax - pillarHeightPercentMin}%`;
+  }
+
+  if (pillarHeightRangeReadout) {
+    pillarHeightRangeReadout.textContent =
+      `Showing ${pillarHeightPercentMin}th – ${pillarHeightPercentMax}th percentile height`;
+  }
+
+  if (pillarHeightRangeCount) {
+    const total = fullPopulationDataset.length;
+    const count = filteredCount === null ? total : filteredCount;
+    pillarHeightRangeCount.textContent = total
+      ? `${count.toLocaleString()} of ${total.toLocaleString()} columns`
+      : 'Loading columns…';
+  }
+}
+
+function updatePillarHeightPercentileFilter() {
+  if (!fullPopulationDataset.length) {
+    updatePillarHeightRangeUI(0);
+    return;
+  }
+
+  clearSelection();
+
+  const filtered = filteredPopulationByHeightPercentile();
+  rebuildHealthPillars(filtered);
+  updatePillarHeightRangeUI(filtered.length);
+}
+
+function handlePillarHeightRangeInput() {
+  clampPillarHeightHandles();
+  updatePillarHeightPercentileFilter();
+}
+
 fetch('https://raw.githubusercontent.com/vasturiano/globe.gl/master/example/datasets/world_population.csv')
   .then(res => res.text())
   .then(csv => {
@@ -1594,10 +1837,11 @@ fetch('https://raw.githubusercontent.com/vasturiano/globe.gl/master/example/data
       }
     }
 
-    const allPillarsData = data
+    fullPopulationDataset = data
       .slice()
       .sort((a, b) => b.pop - a.pop);
-    rebuildHealthPillars(allPillarsData);
+    fullPopulationMaxPop = Math.max(...fullPopulationDataset.map(d => d.pop));
+    updatePillarHeightPercentileFilter();
   })
   .catch(err => console.error('Error loading health pillar data:', err));
 
@@ -1712,8 +1956,16 @@ function openInspectPanel(system) {
 function closeInspectPanel() {
   selectedSystem = null;
   systemSelected = false;
+
+  if (healthMode) {
+    inspectPanel.classList.remove('visible');
+    if (openFiltersBtn) openFiltersBtn.classList.add('visible');
+    return;
+  }
+
   exitHealthPanelMode();
   inspectPanel.classList.remove('visible');
+  if (openFiltersBtn) openFiltersBtn.classList.remove('visible');
 }
 
 function setSelectedSystemState(state) {
@@ -1933,6 +2185,11 @@ elevateBtn.addEventListener('click', () => {
   syncElevateButton();
 });
 closeInspectBtn.addEventListener('click', closeInspectPanel);
+openFiltersBtn.addEventListener('click', () => {
+  if (!healthMode) return;
+  inspectPanel.classList.add('visible');
+  openFiltersBtn.classList.remove('visible');
+});
 healthPositiveBtn.addEventListener('click', () => {
   if (healthOnlyPositive) {
     healthOnlyPositive = false;
@@ -2162,7 +2419,8 @@ function showTooltip(meta, x, y) {
   const redPct = Math.max(0, 100 - greenPct);
 
   tooltip.innerHTML = `
-    <div style="display:flex;flex-direction:column;gap:9px;">
+    <button class="pillarTooltipClose" id="pillarTooltipCloseBtn" aria-label="Close info card">×</button>
+    <div style="display:flex;flex-direction:column;gap:9px;padding-right:18px;">
       <div style="font-size:17px;font-weight:700;color:#ffffff;line-height:1.15;">
         ${city}
       </div>
@@ -2205,6 +2463,14 @@ function showTooltip(meta, x, y) {
     if (greenBar) greenBar.style.width = greenPct + '%';
     if (redBar) redBar.style.width = redPct + '%';
   });
+
+  const closeBtn = document.getElementById('pillarTooltipCloseBtn');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      clearSelection();
+    });
+  }
 }
 
 function clearSelection() {
@@ -2302,6 +2568,11 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') closeInspectPanel();
 });
 
+
+pillarHeightRangeMin.addEventListener('input', handlePillarHeightRangeInput);
+pillarHeightRangeMax.addEventListener('input', handlePillarHeightRangeInput);
+updatePillarHeightRangeUI();
+
 // ===== ANIMATION =====
 let t = 0;
 function animate() {
@@ -2315,7 +2586,8 @@ function animate() {
 
   const isConn = connectionsMode;
   
-  const targetMode = (isConn || healthMode) ? 1.0 : 0.0;
+  // Keep Energy mode cinematic, but make Health mode surface more readable.
+  const targetMode = isConn ? 1.0 : (healthMode ? 0.69 : 0.0);
   nightMaterial.uniforms.uMode.value += (targetMode - nightMaterial.uniforms.uMode.value) * 0.1;
   auroraMaterial.uniforms.uMode.value = nightMaterial.uniforms.uMode.value;
 
