@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Friendship Earth Status</title>
+<link href="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.css" rel="stylesheet" />
 <style>
 html,body{margin:0;overflow:hidden;background:black}
 canvas{display:block}
@@ -39,6 +40,8 @@ canvas{display:block}
   background:rgba(220, 38, 38, 0.85); 
   color:#ffffff;
 }
+
+
 
 #inspectPanel{
   position:fixed;
@@ -313,10 +316,71 @@ body:not(.health-panel-mode) #healthClusterBtn{
   transform:translate(12px, -28px);
 }
 
+
+/* ===== TAKE254 HYBRID 3D / 2D MAPLIBRE TRANSITION ===== */
+#c {
+  transition: opacity 0.6s ease-in-out;
+  position: relative;
+  z-index: 2;
+  cursor: grab;
+}
+#c:active { cursor: grabbing; }
+
+#map-container {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.6s ease-in-out;
+  background: #000;
+}
+
+body.micro-view #map-container {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+body.micro-view #c {
+  opacity: 0;
+  pointer-events: none;
+}
+
+body.micro-view #hud,
+body.micro-view #inspectPanel,
+body.micro-view #openFiltersBtn,
+body.micro-view #flyPanel {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* TAKE275: keep 2D health hover flag + info card visible over MapLibre */
+body.micro-view #pillarTooltip,
+body.micro-view #cityHoverFlag {
+  opacity: 1;
+}
+
+
+
+/* ===== TAKE257 REFERENCE TARGET SELECTOR ===== */
+#ui-container{position:fixed;bottom:24px;left:24px;z-index:60;transition:opacity .5s ease}.dropdown{position:relative;display:inline-block}#target-btn{background:rgba(8,12,24,.65);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.15);border-radius:999px;padding:12px 20px;color:#eef4ff;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 4px 24px rgba(0,0,0,.4);transition:all .2s ease;display:flex;align-items:center;gap:8px;min-width:120px;justify-content:space-between}#target-btn:hover{background:rgba(255,255,255,.1)}.dropdown-content{display:none;position:absolute;bottom:100%;left:0;margin-bottom:12px;background:rgba(8,12,24,.85);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.15);border-radius:12px;min-width:140px;box-shadow:0 8px 32px rgba(0,0,0,.6);overflow:hidden;flex-direction:column}.dropdown-content.show{display:flex}.dropdown-item{padding:14px 20px;color:#eef4ff;font-size:14px;font-weight:500;cursor:pointer;transition:background .2s ease;display:flex;align-items:center;gap:10px}.dropdown-item:hover{background:rgba(255,255,255,.1)}.dropdown-item.active{color:#ffd700;background:rgba(255,215,0,.15)}.gray-moon{filter:grayscale(100%) brightness(1.2);display:inline-block}body.micro-view #ui-container{opacity:0;pointer-events:none}
+
 </style>
 </head>
 <body>
+
+<div id="ui-container">
+  <div class="dropdown">
+    <button id="target-btn">Fly me to ▾</button>
+    <div id="dropdown-menu" class="dropdown-content">
+      <div class="dropdown-item active" data-target="earth">🌍 Earth</div>
+      <div class="dropdown-item" data-target="moon"><span class="gray-moon">🌕</span> Moon</div>
+      <div class="dropdown-item" data-target="sun">☀️ Sun</div>
+    </div>
+  </div>
+</div>
 <canvas id="c"></canvas>
+<div id="map-container"></div>
 <div id="hud">
   <button id="showConnectionsBtn">Show Energy</button>
   <button id="showHealthBtn">Show Health</button>
@@ -351,6 +415,7 @@ body:not(.health-panel-mode) #healthClusterBtn{
 <button id="openFiltersBtn" title="Open filters" aria-label="Open filters">☰</button>
 
 <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+<script src="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.js"></script>
 
 <div id="pillarTooltip" style="
 position:fixed;
@@ -396,7 +461,7 @@ const orbit = {
 // Lower minimum radius lets raw city columns separate visually when zooming in.
 const ORBIT_MIN_RADIUS = 1.025;
 const ORBIT_MAX_RADIUS = 5.0;
-const ORBIT_ZOOM_SPEED = 0.00048;
+const ORBIT_ZOOM_SPEED = 0.0015;
 
 // Close zoom city-footprint mode.
 // At very close zoom, tall columns flatten into short selectable discs.
@@ -406,17 +471,466 @@ const DISC_HEIGHT_FACTOR = 0.018;
 // At close zoom, shrink diameter as height flattens so raw cities separate visually.
 const DISC_RADIUS_FACTOR = 0.24;
 
+// ===== TAKE257 TARGET CAMERA SYSTEM (REFERENCE PARITY) =====
+const TARGET_CONFIGS = {
+  earth: { minRadius: 1.35, maxRadius: 20.0, defaultRadius: 3.1, discStart: DISC_MODE_START_RADIUS, earthScale: 1.0 },
+  moon:  { minRadius: 0.08, maxRadius: 20.0, defaultRadius: 0.35, discStart: 0.12, earthScale: 0.25 },
+  sun:   { minRadius: 0.15, maxRadius: 35.0, defaultRadius: 4.5, discStart: 0.3, earthScale: 1.0 }
+};
+let currentTargetName = 'earth';
+let currentConfig = TARGET_CONFIGS.earth;
+let dynamicCenter = new THREE.Vector3(0, 0, 0);
+const flight = { active:false, startTime:0, duration:2500, startRadius:0, endRadius:0, startCenter:new THREE.Vector3(), endCenterName:'earth', startEarthScale:1.0, startTheta:0, endTheta:0, startPhi:0, endPhi:0 };
+
 function updateCamera() {
   const r = orbit.radius;
   const cp = Math.cos(orbit.phi);
   camera.position.set(
-    Math.sin(orbit.theta) * cp * r,
-    Math.sin(orbit.phi) * r,
-    Math.cos(orbit.theta) * cp * r
+    dynamicCenter.x + Math.sin(orbit.theta) * cp * r,
+    dynamicCenter.y + Math.sin(orbit.phi) * r,
+    dynamicCenter.z + Math.cos(orbit.theta) * cp * r
   );
-  camera.lookAt(0, 0, 0);
+  camera.lookAt(dynamicCenter);
 }
+
 updateCamera();
+
+// ===== TAKE254 HYBRID ENGINE: MICRO 2D MAPLIBRE SETUP =====
+let isMicroView = false;
+let streetMap = null;
+const MACRO_MIN_RADIUS = 1.35;
+const MICRO_START_ZOOM = 4.5;
+const MICRO_EXIT_ZOOM = 4.3;
+
+function initOrUpdateMap(lat, lng) {
+  if (typeof maplibregl === 'undefined') {
+    console.warn('MapLibre not loaded; cannot enter 2D map view.');
+    return;
+  }
+
+  if (!streetMap) {
+    streetMap = new maplibregl.Map({
+      container: 'map-container',
+      style: {
+        version: 8,
+        sources: {
+          osm: {
+            type: 'raster',
+            tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+            tileSize: 256,
+            attribution: '&copy; OpenStreetMap Contributors'
+          }
+        },
+        layers: [{
+          id: 'osm-tiles',
+          type: 'raster',
+          source: 'osm',
+          minzoom: 0,
+          maxzoom: 19
+        }]
+      },
+      center: [lng, lat],
+      zoom: MICRO_START_ZOOM,
+      pitch: 0,
+      interactive: true
+    });
+
+    streetMap.on('zoom', () => {
+      if (isMicroView && streetMap.getZoom() < MICRO_EXIT_ZOOM) {
+        switchToMacro();
+      }
+    });
+
+    streetMap.on('load', () => {
+      console.log('✅ MapLibre 2D map loaded.');
+      upsert2DHealthLayer();
+    });
+  } else {
+    streetMap.jumpTo({ center: [lng, lat], zoom: MICRO_START_ZOOM });
+    streetMap.resize();
+  }
+}
+
+function setHealthOverlayForView() {
+  const in3D = !isMicroView;
+  if (typeof healthPillarsGroup !== 'undefined' && healthPillarsGroup) {
+    healthPillarsGroup.visible = healthMode && in3D;
+  }
+  updateFlyPanelState();
+}
+
+
+// ===== TAKE272: 2D HEALTH DONUT DISKS =====
+// Uses the same loaded Health dataset and clusteredGreenShare() logic as the 3D columns.
+// 3D/2D switching foundation is unchanged.
+function get2DHealthDisplayData() {
+  if (!fullPopulationDataset || !fullPopulationDataset.length) return [];
+
+  const filtered = filteredPopulationByHeightPercentile();
+  return clusterHealthCities(filtered);
+}
+
+function build2DHealthGeoJSON(data) {
+  const maxPop = fullPopulationMaxPop || Math.max(...data.map(d => d.pop || 0), 1);
+  const totalPop = data.reduce((sum, d) => sum + (Number.isFinite(d.pop) ? d.pop : 0), 0) || 1;
+
+  // Match the 3D normalization logic: raw regional shares are scaled so weighted avg ~20% green.
+  const rawShares = data.map(d => clusteredGreenShare(d.lat, d.lng));
+  const rawWeightedAvg = rawShares.reduce((sum, share, idx) => {
+    const pop = Number.isFinite(data[idx].pop) ? data[idx].pop : 0;
+    return sum + share * pop;
+  }, 0) / totalPop;
+  const shareScale = rawWeightedAvg > 0 ? 0.20 / rawWeightedAvg : 1.0;
+
+  return {
+    type: 'FeatureCollection',
+    features: data
+      .filter(d => Number.isFinite(d.lat) && Number.isFinite(d.lng))
+      .map((d, idx) => {
+        const popNorm = Math.sqrt((Number.isFinite(d.pop) ? d.pop : 0) / maxPop);
+        const greenShare = clamp01(rawShares[idx] * shareScale);
+        const redShare = 1 - greenShare;
+
+        return {
+          type: 'Feature',
+          geometry: {
+            type: 'Point',
+            coordinates: [d.lng, d.lat]
+          },
+          properties: {
+            id: d.id || `${d.lat}_${d.lng}`,
+            pillarId: d.id || `${d.lat}_${d.lng}`,
+            name: d.placeLabel || d.city || d.cityAscii || d.adminName || approxCityName(d.lat, d.lng),
+            placeLabel: d.placeLabel || d.city || d.cityAscii || d.adminName || approxCityName(d.lat, d.lng),
+            city: d.city || d.cityAscii || d.placeLabel || null,
+            cityAscii: d.cityAscii || null,
+            adminName: d.adminName || null,
+            lat: d.lat,
+            lng: d.lng,
+            pop: Number.isFinite(d.pop) ? d.pop : 0,
+            popNorm,
+            greenShare,
+            redShare,
+            isCluster: !!d.isCluster,
+            clusterCount: d.clusterCount || 1
+          }
+        };
+      })
+  };
+}
+
+
+let hovered2DHealthId = null;
+let selected2DHealthMeta = null;
+let health2DInteractionsReady = false;
+
+function featureToHealthMeta(feature) {
+  const p = feature && feature.properties ? feature.properties : {};
+  return {
+    id: p.id || p.pillarId || null,
+    pillarId: p.pillarId || p.id || null,
+    source: 'maplibre-health2d',
+    city: p.city || p.name || null,
+    cityAscii: p.cityAscii || null,
+    adminName: p.adminName || null,
+    placeLabel: p.placeLabel || p.name || p.city || null,
+    isCluster: !!p.isCluster,
+    clusterCount: Number(p.clusterCount) || 1,
+    lat: Number(p.lat),
+    lng: Number(p.lng),
+    pop: Number(p.pop) || 0,
+    greenShare: Number(p.greenShare) || 0,
+    redShare: Number(p.redShare) || Math.max(0, 1 - (Number(p.greenShare) || 0))
+  };
+}
+
+function set2DSelectedHealthDisk(meta) {
+  selected2DHealthMeta = meta || null;
+
+  if (!streetMap || !streetMap.getSource('health2d-selected')) return;
+
+  const data = meta && Number.isFinite(meta.lat) && Number.isFinite(meta.lng)
+    ? {
+        type: 'FeatureCollection',
+        features: [{
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: [meta.lng, meta.lat] },
+          properties: {
+            popNorm: Math.sqrt((Number(meta.pop) || 0) / Math.max(fullPopulationMaxPop || 1, 1))
+          }
+        }]
+      }
+    : { type: 'FeatureCollection', features: [] };
+
+  streetMap.getSource('health2d-selected').setData(data);
+}
+
+function ensure2DSelectedHealthLayer() {
+  if (!streetMap) return;
+
+  if (!streetMap.getSource('health2d-selected')) {
+    streetMap.addSource('health2d-selected', {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: [] }
+    });
+  }
+
+  if (!streetMap.getLayer('health2d-selected-halo')) {
+    streetMap.addLayer({
+      id: 'health2d-selected-halo',
+      type: 'circle',
+      source: 'health2d-selected',
+      paint: {
+        'circle-radius': [
+          'interpolate', ['linear'], ['zoom'],
+          3, ['+', 5, ['*', 10, ['get', 'popNorm']]],
+          6, ['+', 7, ['*', 15, ['get', 'popNorm']]],
+          10, ['+', 10, ['*', 25, ['get', 'popNorm']]],
+          14, ['+', 14, ['*', 39, ['get', 'popNorm']]]
+        ],
+        'circle-color': 'rgba(0,0,0,0)',
+        'circle-stroke-color': '#ffffff',
+        'circle-stroke-width': [
+          'interpolate', ['linear'], ['zoom'],
+          3, 5,
+          10, 7,
+          14, 9
+        ],
+        'circle-opacity': 0.85
+      }
+    });
+  }
+
+  if (!streetMap.getLayer('health2d-selected-ring')) {
+    streetMap.addLayer({
+      id: 'health2d-selected-ring',
+      type: 'circle',
+      source: 'health2d-selected',
+      paint: {
+        'circle-radius': [
+          'interpolate', ['linear'], ['zoom'],
+          3, ['+', 5, ['*', 10, ['get', 'popNorm']]],
+          6, ['+', 7, ['*', 15, ['get', 'popNorm']]],
+          10, ['+', 10, ['*', 25, ['get', 'popNorm']]],
+          14, ['+', 14, ['*', 39, ['get', 'popNorm']]]
+        ],
+        'circle-color': 'rgba(0,0,0,0)',
+        'circle-stroke-color': '#000000',
+        'circle-stroke-width': [
+          'interpolate', ['linear'], ['zoom'],
+          3, 2,
+          10, 3,
+          14, 4
+        ],
+        'circle-opacity': 1
+      }
+    });
+  }
+}
+
+function setup2DHealthInteractions() {
+  if (!streetMap || health2DInteractionsReady) return;
+  health2DInteractionsReady = true;
+
+  const layers = ['health2d-green-inner', 'health2d-red-base'];
+
+  streetMap.on('mousemove', 'health2d-red-base', (e) => {
+    if (!healthMode || !isMicroView || !e.features || !e.features.length) return;
+    const feature = e.features[0];
+    const meta = featureToHealthMeta(feature);
+
+    streetMap.getCanvas().style.cursor = 'pointer';
+    showCityHoverFlag(meta, e.originalEvent.clientX, e.originalEvent.clientY);
+
+    if (hovered2DHealthId !== null && streetMap.getSource('health2d')) {
+      try { streetMap.setFeatureState({ source: 'health2d', id: hovered2DHealthId }, { hover: false }); } catch (_) {}
+    }
+    hovered2DHealthId = feature.id ?? null;
+    if (hovered2DHealthId !== null) {
+      try { streetMap.setFeatureState({ source: 'health2d', id: hovered2DHealthId }, { hover: true }); } catch (_) {}
+    }
+  });
+
+  streetMap.on('mouseleave', 'health2d-red-base', () => {
+    if (streetMap) streetMap.getCanvas().style.cursor = '';
+    hideCityHoverFlag();
+    if (hovered2DHealthId !== null && streetMap && streetMap.getSource('health2d')) {
+      try { streetMap.setFeatureState({ source: 'health2d', id: hovered2DHealthId }, { hover: false }); } catch (_) {}
+    }
+    hovered2DHealthId = null;
+  });
+
+  streetMap.on('click', 'health2d-red-base', (e) => {
+    if (!healthMode || !isMicroView || !e.features || !e.features.length) return;
+    e.preventDefault();
+
+    const meta = featureToHealthMeta(e.features[0]);
+    lastSelectedCityForOrigin = meta;
+    selectedPillar = meta.pillarId;
+
+    hideCityHoverFlag();
+    set2DSelectedHealthDisk(meta);
+    showTooltip(meta, e.originalEvent.clientX, e.originalEvent.clientY);
+  });
+
+  // Green layer sits above red. Give it the same hover/click behavior.
+  streetMap.on('mousemove', 'health2d-green-inner', (e) => {
+    if (!healthMode || !isMicroView || !e.features || !e.features.length) return;
+    const meta = featureToHealthMeta(e.features[0]);
+    streetMap.getCanvas().style.cursor = 'pointer';
+    showCityHoverFlag(meta, e.originalEvent.clientX, e.originalEvent.clientY);
+  });
+
+  streetMap.on('click', 'health2d-green-inner', (e) => {
+    if (!healthMode || !isMicroView || !e.features || !e.features.length) return;
+    e.preventDefault();
+
+    const meta = featureToHealthMeta(e.features[0]);
+    lastSelectedCityForOrigin = meta;
+    selectedPillar = meta.pillarId;
+
+    hideCityHoverFlag();
+    set2DSelectedHealthDisk(meta);
+    showTooltip(meta, e.originalEvent.clientX, e.originalEvent.clientY);
+  });
+}
+
+
+function upsert2DHealthLayer() {
+  if (!streetMap || !streetMap.isStyleLoaded || !streetMap.isStyleLoaded()) return;
+
+  const data = get2DHealthDisplayData();
+  const geojson = build2DHealthGeoJSON(data);
+
+  if (streetMap.getSource('health2d')) {
+    streetMap.getSource('health2d').setData(geojson);
+  } else {
+    streetMap.addSource('health2d', {
+      type: 'geojson',
+      data: geojson,
+      generateId: true
+    });
+  }
+
+  // Red base disk = whole city/cluster.
+  if (!streetMap.getLayer('health2d-red-base')) {
+    streetMap.addLayer({
+      id: 'health2d-red-base',
+      type: 'circle',
+      source: 'health2d',
+      paint: {
+        'circle-radius': [
+          'interpolate', ['linear'], ['zoom'],
+          3, ['+', 2, ['*', 9, ['get', 'popNorm']]],
+          6, ['+', 3, ['*', 14, ['get', 'popNorm']]],
+          10, ['+', 5, ['*', 24, ['get', 'popNorm']]],
+          14, ['+', 7, ['*', 38, ['get', 'popNorm']]]
+        ],
+        'circle-color': '#dc2626',
+        'circle-opacity': [
+          'case',
+          ['boolean', ['feature-state', 'hover'], false],
+          0.95,
+          0.78
+        ],
+        'circle-stroke-width': 0.8,
+        'circle-stroke-color': 'rgba(255,255,255,0.28)'
+      }
+    });
+  }
+
+  // Green inner disk = positive share. This reads like a donut/stacked health stamp:
+  // red outside remains visible, green center scales by sqrt(share) so area roughly represents share.
+  if (!streetMap.getLayer('health2d-green-inner')) {
+    streetMap.addLayer({
+      id: 'health2d-green-inner',
+      type: 'circle',
+      source: 'health2d',
+      paint: {
+        'circle-radius': [
+  'interpolate', ['linear'], ['zoom'],
+  3, ['*', ['+', 2, ['*', 9, ['get', 'popNorm']]], ['sqrt', ['max', 0.001, ['get', 'greenShare']]]],
+  6, ['*', ['+', 3, ['*', 14, ['get', 'popNorm']]], ['sqrt', ['max', 0.001, ['get', 'greenShare']]]],
+  10, ['*', ['+', 5, ['*', 24, ['get', 'popNorm']]], ['sqrt', ['max', 0.001, ['get', 'greenShare']]]],
+  14, ['*', ['+', 7, ['*', 38, ['get', 'popNorm']]], ['sqrt', ['max', 0.001, ['get', 'greenShare']]]]
+],
+        'circle-color': '#16a34a',
+        'circle-opacity': 0.86,
+        'circle-stroke-width': 0
+      }
+    });
+  }
+
+  // Small center pin for readability at wide zoom.
+  if (!streetMap.getLayer('health2d-center-pin')) {
+    streetMap.addLayer({
+      id: 'health2d-center-pin',
+      type: 'circle',
+      source: 'health2d',
+      minzoom: 4.2,
+      paint: {
+        'circle-radius': [
+          'interpolate', ['linear'], ['zoom'],
+          4, 0.5,
+          9, 1.4,
+          14, 2.4
+        ],
+        'circle-color': '#f8fafc',
+        'circle-opacity': 0.55
+      }
+    });
+  }
+
+  ensure2DSelectedHealthLayer();
+  setup2DHealthInteractions();
+
+  const visible = healthMode && isMicroView;
+  set2DHealthLayerVisibility(visible);
+}
+
+function set2DHealthLayerVisibility(visible) {
+  if (!streetMap) return;
+  const value = visible ? 'visible' : 'none';
+  ['health2d-red-base', 'health2d-green-inner', 'health2d-center-pin', 'health2d-selected-halo', 'health2d-selected-ring'].forEach(id => {
+    if (streetMap.getLayer(id)) streetMap.setLayoutProperty(id, 'visibility', value);
+  });
+}
+
+function refresh2DHealthLayerIfActive() {
+  if (streetMap && isMicroView) {
+    upsert2DHealthLayer();
+  }
+}
+
+function switchToMicro(lat, lng) {
+  isMicroView = true;
+  initOrUpdateMap(lat, lng);
+  document.body.classList.add('micro-view');
+  setHealthOverlayForView();
+  clearSelection();
+  closeInspectPanel();
+  updateFlyPanelState();
+  if (streetMap) {
+    requestAnimationFrame(() => {
+      streetMap.resize();
+      upsert2DHealthLayer();
+    });
+  }
+  console.log(`🗺️ Switched to 2D MapLibre view at ${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+}
+
+function switchToMacro() {
+  isMicroView = false;
+  document.body.classList.remove('micro-view');
+  orbit.radius = MACRO_MIN_RADIUS + 0.05;
+  updateCamera();
+  setHealthOverlayForView();
+  set2DHealthLayerVisibility(false);
+  set2DSelectedHealthDisk(null);
+  updateFlyPanelState();
+  console.log('🌍 Returned to 3D globe view');
+}
+
 
 const inspectPanel = document.getElementById('inspectPanel');
 const inspectTitle = document.getElementById('inspectTitle');
@@ -539,6 +1053,9 @@ function updateHealthFilterButtons() {
   healthNegativeBtn.classList.toggle('active', healthOnlyNegative);
 }
 
+
+
+
 // UI Logic
 showConnectionsBtn.addEventListener('click', () => {
   connectionsMode = !connectionsMode;
@@ -568,8 +1085,10 @@ showHealthBtn.addEventListener('click', () => {
   showHealthBtn.textContent = healthMode ? 'Hide Health' : 'Show Health';
   showConnectionsBtn.style.display = healthMode ? 'none' : 'block';
   updateHealthPillarVisibility();
+  updateFlyPanelState();
   syncElevateButton();
 });
+
 
 // ===== STARS (Depth Colored) =====
 const starsGeom = new THREE.BufferGeometry();
@@ -820,10 +1339,6 @@ function getApproxMoonScenePosition(distance = moonDistance) {
     .add(orbitUp.clone().multiplyScalar(Math.sin(latRad)))
     .normalize();
 
-  console.log(
-    `🌙 Moon position updated. Elongation from Sun: ${normalizeDeg(moonLongitude - sunLongitude).toFixed(1)}°, latitude: ${moonLatitude.toFixed(1)}°`
-  );
-
   return finalDir.multiplyScalar(distance);
 }
 
@@ -972,16 +1487,12 @@ function shouldApplyHealthShapeUpdate() {
 }
 
 function zoomPanSensitivity() {
-  // Far away: normal orbit speed.
-  // Close to surface: slow, precise navigation.
-  const zoomIn = clamp01((ORBIT_MAX_RADIUS - orbit.radius) / (ORBIT_MAX_RADIUS - ORBIT_MIN_RADIUS));
+  const zoomIn = clamp01((currentConfig.maxRadius - orbit.radius) / (currentConfig.maxRadius - currentConfig.minRadius));
   return 1.0 - zoomIn * 0.82;
 }
 
 function zoomMassFactor() {
-  // 1.0 at far zoom, 1.5 at max close zoom.
-  // Higher mass = slightly slower response, giving Earth more visual weight.
-  const closeBlend = clamp01((DISC_MODE_START_RADIUS - orbit.radius) / (DISC_MODE_START_RADIUS - ORBIT_MIN_RADIUS));
+  const closeBlend = clamp01((currentConfig.discStart - orbit.radius) / (currentConfig.discStart - currentConfig.minRadius));
   return 1.0 + closeBlend * 0.5;
 }
 
@@ -2123,11 +2634,15 @@ function updateHealthColumnTransition() {
 }
 
 function updateHealthPillarVisibility() {
-  healthPillarsGroup.visible = healthMode;
-  if (greenInstances) greenInstances.visible = healthMode && !healthOnlyNegative;
-  if (redInstances) redInstances.visible = healthMode && !healthOnlyPositive;
+  const healthLayerVisible = healthMode && !isMicroView;
+  set2DHealthLayerVisibility(healthMode && isMicroView);
+  updateFlyPanelState();
 
-  if (!healthMode) {
+  healthPillarsGroup.visible = healthLayerVisible;
+  if (greenInstances) greenInstances.visible = healthLayerVisible && !healthOnlyNegative;
+  if (redInstances) redInstances.visible = healthLayerVisible && !healthOnlyPositive;
+
+  if (!healthLayerVisible) {
     clearSelectedPillarOverlay();
     setHealthInstanceOpacity(HEALTH_FOCUS_FULL_OPACITY);
   } else if (selectedPillar) {
@@ -2282,12 +2797,14 @@ function updatePillarHeightPercentileFilter() {
   const displayData = clusterHealthCities(filtered);
   rebuildHealthPillars(displayData);
   updatePillarHeightRangeUI(displayData.length);
+  refresh2DHealthLayerIfActive();
 }
 
 function handlePillarHeightRangeInput() {
   clampPillarHeightHandles();
   animateNextHealthRebuild = false;
   updatePillarHeightPercentileFilter();
+  refresh2DHealthLayerIfActive();
 }
 
 
@@ -2423,6 +2940,8 @@ function applyLoadedHealthDataset(data) {
   console.log(`✅ Deep zoom enabled: orbit radius ${ORBIT_MIN_RADIUS}–${ORBIT_MAX_RADIUS}. Use raw cities + city-close zoom to separate columns. City-close zoom enabled: cached stacked shrink with dirty zoom reshape, selected ring scales, and Earth gains 50% mass feel at max zoom.`);
   updatePillarHeightPercentileFilter();
 }
+
+updateFlyPanelState();
 
 loadWorldCitiesDataset()
   .catch(loadFallbackPopulationDataset)
@@ -2576,6 +3095,7 @@ const systemsData = [
   {name:'Indore', lat:22.7196, lon:75.8577}
 ];
 const extraSystems = systemsData.map(d=>{ const s = createSystem(d.name); scene.add(s.g); s.base = latLonToVec(d.lat, d.lon, 1.001); return s; });
+extraSystems.forEach(s => { s.g.visible = false; });
 
 // ===== SYNCHRONIZED, BI-DIRECTIONAL ENERGY ARCS =====
 let globalMaxArcLength = 0;
@@ -2723,6 +3243,7 @@ function updateArcPositions(startVec, endVec, arcObj) {
 
 // ===== UI & STATE =====
 const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
 const pointer = new THREE.Vector2();
 
 function projectPointer(event) {
@@ -2739,6 +3260,7 @@ const primarySystem = {
   name: 'Goa',
   state: 'default'
 };
+primarySystem.g.visible = false;
 const clickableSystems = [primarySystem, ...extraSystems];
 const connectionPool = Array.from({ length: clickableSystems.length - 1 }, () => createArcLine());
 const flyPulseArc = createArcLine();
@@ -2906,6 +3428,72 @@ function updateEarthSpin() {
 }
 
 
+// ===== TAKE257 TARGET DROPDOWN UI LOGIC =====
+const targetBtn = document.getElementById('target-btn');
+const dropdownMenu = document.getElementById('dropdown-menu');
+const dropdownItems = document.querySelectorAll('.dropdown-item');
+const bodyIcons = { earth: '🌍', moon: '<span class="gray-moon">🌕</span>', sun: '☀️' };
+const bodyNames = { earth: 'Earth', moon: 'Moon', sun: 'Sun' };
+
+function getTargetPosition(name) {
+  if (name === 'earth') return new THREE.Vector3(0, 0, 0);
+  if (name === 'sun') return sun.position.clone();
+  if (name === 'moon' && moon) return moon.position.clone();
+  return new THREE.Vector3(0, 0, 0);
+}
+
+function flyToTarget(targetName) {
+  if (!TARGET_CONFIGS[targetName]) return;
+  if (isMicroView) switchToMacro();
+  clearSelection();
+  if (targetName === currentTargetName && !flight.active) {
+    updateFlyPanelState();
+    return;
+  }
+  flight.active = true;
+  flight.startTime = performance.now();
+  flight.duration = 2500;
+  flight.startRadius = orbit.radius;
+  flight.endRadius = TARGET_CONFIGS[targetName].defaultRadius;
+  flight.startCenter.copy(dynamicCenter);
+  flight.endCenterName = targetName;
+  flight.startEarthScale = earthGroup.scale.x;
+  flight.startTheta = orbit.theta;
+  flight.startPhi = orbit.phi;
+  const tPos = getTargetPosition(targetName);
+  if (targetName === 'moon') { flight.endTheta = Math.atan2(tPos.x, tPos.z) + 0.4; flight.endPhi = 0.15; }
+  else if (targetName === 'sun') { flight.endTheta = Math.atan2(tPos.x, tPos.z) + 0.3; flight.endPhi = 0.1; }
+  else { flight.endTheta = Math.atan2(sun.position.x, sun.position.z) - 0.6; flight.endPhi = 0.25; }
+  let dTheta = flight.endTheta - flight.startTheta;
+  while (dTheta > Math.PI) dTheta -= Math.PI * 2;
+  while (dTheta < -Math.PI) dTheta += Math.PI * 2;
+  flight.endTheta = flight.startTheta + dTheta;
+  currentTargetName = targetName;
+  currentConfig = TARGET_CONFIGS[targetName];
+
+  if (healthMode && targetName !== 'earth') {
+    inspectPanel.classList.remove('visible');
+    if (openFiltersBtn) openFiltersBtn.classList.add('visible');
+  }
+  setHealthOverlayForView();
+  updateFlyPanelState();
+}
+
+if (targetBtn && dropdownMenu) {
+  targetBtn.addEventListener('click', (e) => { e.stopPropagation(); dropdownMenu.classList.toggle('show'); });
+  window.addEventListener('click', () => dropdownMenu.classList.remove('show'));
+}
+dropdownItems.forEach(item => {
+  item.addEventListener('click', (e) => {
+    const target = e.target.closest('.dropdown-item')?.dataset.target;
+    if (!target) return;
+    flyToTarget(target);
+    if (targetBtn) targetBtn.innerHTML = `Fly me to ▾`;
+    dropdownItems.forEach(i => i.classList.remove('active'));
+    e.target.closest('.dropdown-item').classList.add('active');
+  });
+});
+
 let selectedPillar = null;
 const HEALTH_FOCUS_DIM_OPACITY = 0.22;
 const HEALTH_FOCUS_FULL_OPACITY = 0.96;
@@ -2917,6 +3505,25 @@ const tooltip = document.getElementById('pillarTooltip');
 const cityHoverFlag = document.getElementById('cityHoverFlag');
 const flyInput = document.getElementById('flyInput');
 const flySuggestions = document.getElementById('flySuggestions');
+
+function updateFlyPanelState() {
+  const flyPanelEl = document.getElementById('flyPanel');
+  const flyInputEl = document.getElementById('flyInput');
+  const flySuggestionsEl = document.getElementById('flySuggestions');
+
+  if (!flyPanelEl || !flyInputEl) return;
+
+  const shouldShow = healthMode && !isMicroView && currentTargetName === 'earth';
+  const canUse = shouldShow && currentTargetName === 'earth';
+
+  flyPanelEl.style.display = shouldShow ? 'block' : 'none';
+  flyInputEl.disabled = !canUse;
+  flyInputEl.style.opacity = canUse ? '1' : '0.45';
+  flyInputEl.style.cursor = canUse ? 'text' : 'not-allowed';
+  flyInputEl.placeholder = canUse ? 'Fly me to a city...' : 'Fly me to is available on Earth';
+  if (!canUse && flySuggestionsEl) flySuggestionsEl.style.display = 'none';
+}
+
 
 const pillarRing = new THREE.Mesh(
   new THREE.RingGeometry(0.015, 0.025, 64),
@@ -3113,6 +3720,8 @@ function showTooltip(meta, x, y) {
   `;
 
   tooltip.style.display = 'block';
+  tooltip.style.opacity = '1';
+  tooltip.style.pointerEvents = 'auto';
   tooltip.style.left = Math.min(window.innerWidth - 260, x + 14) + 'px';
   tooltip.style.top = Math.min(window.innerHeight - 190, y + 14) + 'px';
 
@@ -3134,6 +3743,8 @@ function showTooltip(meta, x, y) {
 
 function clearSelection() {
   selectedPillar = null;
+  selected2DHealthMeta = null;
+  set2DSelectedHealthDisk(null);
   pillarRing.visible = false;
   tooltip.style.display = 'none';
   hideCityHoverFlag();
@@ -3180,6 +3791,7 @@ function showCityHoverFlag(meta, x, y) {
   cityHoverFlag.textContent = hoverPlaceLabel(meta);
   cityHoverFlag.style.left = x + 'px';
   cityHoverFlag.style.top = y + 'px';
+  cityHoverFlag.style.opacity = '1';
   cityHoverFlag.style.display = 'block';
 }
 
@@ -3218,6 +3830,7 @@ let dragging = false, lastX = 0, lastY = 0, pointerMoved = false;
 const DRAG_THRESHOLD = 5;
 
 canvas.addEventListener('pointerdown', (e) => {
+  if (isMicroView) return;
   pointerMoved = false;
   if (!elevatedMode && elevateTransitionActive) {
     elevateTransitionActive = false;
@@ -3225,6 +3838,10 @@ canvas.addEventListener('pointerdown', (e) => {
   dragging = true; pointerMoved = false; lastX = e.clientX; lastY = e.clientY;
 });
 canvas.addEventListener('pointermove', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+  if (isMicroView) return;
   if (!dragging && healthMode) {
     projectPointer(e);
     raycaster.setFromCamera(pointer, camera);
@@ -3268,22 +3885,58 @@ canvas.addEventListener('pointerup', (e) => {
   dragging = false;
 });
 canvas.addEventListener('pointerleave', () => { dragging = false; hideCityHoverFlag(); });
+
+// ===== TAKE254 CENTER-SYNC ZOOM TRIGGER =====
+function getScreenCenterLatLng() {
+  raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+  const intersects = raycaster.intersectObject(earth, false);
+  if (intersects.length > 0) {
+    const pt = intersects[0].point.clone();
+    earthGroup.worldToLocal(pt);
+    pt.normalize();
+
+    const lat = Math.asin(pt.y) * (180 / Math.PI);
+    let lng = Math.atan2(pt.z, -pt.x) * (180 / Math.PI) - 180;
+
+    while (lng < -180) lng += 360;
+    while (lng > 180) lng -= 360;
+
+    return { lat, lng };
+  }
+  return null;
+}
+
 canvas.addEventListener('wheel', (e) => {
+  if (flight.active || isMicroView) return;
   e.preventDefault();
-  orbit.radius += (e.deltaY * ORBIT_ZOOM_SPEED) / zoomMassFactor();
-  orbit.radius = Math.max(ORBIT_MIN_RADIUS, Math.min(ORBIT_MAX_RADIUS, orbit.radius));
+  const zoomAmount = (e.deltaY * ORBIT_ZOOM_SPEED) / zoomMassFactor();
+  orbit.radius += zoomAmount;
+  if (currentTargetName === 'earth') {
+    const panStrength = 0.6;
+    orbit.theta -= mouse.x * zoomAmount * panStrength;
+    orbit.phi -= mouse.y * zoomAmount * panStrength;
+  }
+  orbit.phi = Math.max(-1.25, Math.min(1.25, orbit.phi));
+  if (currentTargetName === 'earth' && orbit.radius <= currentConfig.minRadius && e.deltaY < 0) {
+    const loc = getScreenCenterLatLng();
+    if (loc) { switchToMicro(loc.lat, loc.lng); return; }
+  }
+  orbit.radius = Math.max(currentConfig.minRadius, Math.min(currentConfig.maxRadius, orbit.radius));
   updateCamera();
   markHealthShapeDirty();
   applyCloseZoomDiscMode();
+  setHealthOverlayForView();
 }, { passive: false });
 
 window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight); camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix(); updateCamera();
+  if (streetMap) streetMap.resize();
 });
 
 
 canvas.addEventListener('click', (e) => {
+  if (isMicroView) return;
   if (!healthMode) return;
   if (pointerMoved) { pointerMoved = false; return; }
 
@@ -3686,6 +4339,26 @@ function animate() {
   requestAnimationFrame(animate);
   updateEarthSpin();
 
+  if (flight.active) {
+    const elapsed = performance.now() - flight.startTime;
+    let p = Math.min(elapsed / flight.duration, 1.0);
+    let flightP = Math.min(p / 0.65, 1.0);
+    flightP = flightP * flightP * (3 - 2 * flightP);
+    let panP = Math.max(0, (p - 0.65) / 0.35);
+    panP = panP * panP * (3 - 2 * panP);
+    const endPos = getTargetPosition(flight.endCenterName);
+    dynamicCenter.lerpVectors(flight.startCenter, endPos, flightP);
+    orbit.radius = flight.startRadius + (flight.endRadius - flight.startRadius) * flightP;
+    const currentScale = flight.startEarthScale + (TARGET_CONFIGS[flight.endCenterName].earthScale - flight.startEarthScale) * flightP;
+    earthGroup.scale.setScalar(currentScale);
+    orbit.theta = flight.startTheta + (flight.endTheta - flight.startTheta) * panP;
+    orbit.phi = flight.startPhi + (flight.endPhi - flight.startPhi) * panP;
+    if (p >= 1.0) flight.active = false;
+  } else {
+    dynamicCenter.copy(getTargetPosition(currentTargetName));
+    earthGroup.scale.setScalar(TARGET_CONFIGS[currentTargetName].earthScale);
+  }
+
   nightMaterial.uniforms.lightDir.value.copy(sun.position).normalize();
   atmosphereMaterial.uniforms.lightDir.value.copy(sun.position).normalize();
   auroraMaterial.uniforms.lightDir.value.copy(sun.position).normalize();
@@ -3786,7 +4459,7 @@ function animate() {
     system.currentPosition = currentPos;
     system.currentAnchor = currentAnchor;
     system.currentOutward = currentOutward;
-    system.g.visible = !healthMode;
+    system.g.visible = connectionsMode && !healthMode && !isMicroView;
   });
 
 
@@ -3844,9 +4517,17 @@ function animate() {
     pillarRing.scale.set(1, 1, 1);
   }
 
-  if (moon) orientMoonTowardEarth(moon);
+  if (moon) {
+    moon.position.copy(getApproxMoonScenePosition(moonDistance));
+    orientMoonTowardEarth(moon);
+  }
 
-  renderer.render(scene, camera);
+  
+setHealthOverlayForView();
+  if (!isMicroView) updateCamera();
+  setHealthOverlayForView();
+  if (!isMicroView) renderer.render(scene, camera);
+
 }
 animate();
 </script>
