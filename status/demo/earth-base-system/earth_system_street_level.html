@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Natural Earth & Sky - Survey Base</title>
+
+<link href="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.css" rel="stylesheet" />
+
+<style>
+html,body{margin:0;overflow:hidden;background:black;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;}
+canvas{display:block;}
+
+/* ===== HYBRID ENGINE CONTAINERS ===== */
+#c {
+  transition: opacity 0.6s ease-in-out;
+  position: relative;
+  z-index: 2;
+  cursor: grab;
+}
+#c:active {
+  cursor: grabbing;
+}
+
+#map-container {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.6s ease-in-out;
+  background: #000;
+}
+
+/* ===== DROPDOWN UI ===== */
+#ui-container {
+  position: fixed;
+  bottom: 24px;
+  left: 24px;
+  z-index: 10;
+  transition: opacity 0.5s ease;
+}
+
+.dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+#target-btn {
+  background: rgba(8, 12, 24, 0.65);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 999px;
+  padding: 12px 20px;
+  color: #eef4ff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 120px;
+  justify-content: space-between;
+}
+
+#target-btn:hover { background: rgba(255, 255, 255, 0.1); }
+
+.dropdown-content {
+  display: none;
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 12px;
+  background: rgba(8, 12, 24, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  min-width: 140px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+  flex-direction: column;
+}
+
+.dropdown-content.show {
+  display: flex;
+}
+
+.dropdown-item {
+  padding: 14px 20px;
+  color: #eef4ff;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dropdown-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.dropdown-item.active {
+  color: #ffd700;
+  background: rgba(255, 215, 0, 0.15);
+}
+
+.gray-moon {
+  filter: grayscale(100%) brightness(1.2);
+  display: inline-block;
+}
+</style>
+</head>
+<body>
+
+<div id="ui-container">
+  <div class="dropdown">
+    <button id="target-btn">🌍 Earth ▾</button>
+    <div id="dropdown-menu" class="dropdown-content">
+      <div class="dropdown-item active" data-target="earth">🌍 Earth</div>
+      <div class="dropdown-item" data-target="moon"><span class="gray-moon">🌕</span> Moon</div>
+      <div class="dropdown-item" data-target="sun">☀️ Sun</div>
+    </div>
+  </div>
+</div>
+
+<canvas id="c"></canvas>
+<div id="map-container"></div>
+
+<script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+<script src="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.js"></script>
+
+<script>
+// ==========================================
+// HYBRID ENGINE: MICRO (2D MAPLIBRE) SETUP
+// ==========================================
+let isMicroView = false;
+let streetMap = null;
+
+const MACRO_MIN_RADIUS = 1.35; 
+const MICRO_START_ZOOM = 4.5;  
+const MICRO_EXIT_ZOOM = 4.3;   
+
+function initOrUpdateMap(lat, lng) {
+  if (!streetMap) {
+    streetMap = new maplibregl.Map({
+      container: 'map-container',
+      style: {
+        version: 8,
+        sources: {
+          'osm': {
+            type: 'raster',
+            tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+            tileSize: 256,
+            attribution: '&copy; OpenStreetMap Contributors'
+          }
+        },
+        layers: [{
+          id: 'osm-tiles',
+          type: 'raster',
+          source: 'osm',
+          minzoom: 0,
+          maxzoom: 19
+        }]
+      },
+      center: [lng, lat],
+      zoom: MICRO_START_ZOOM, 
+      pitch: 0,
+      interactive: true
+    });
+
+    streetMap.on('zoom', () => {
+      if (isMicroView && streetMap.getZoom() < MICRO_EXIT_ZOOM) {
+        switchToMacro();
+      }
+    });
+  } else {
+    streetMap.jumpTo({ center: [lng, lat], zoom: MICRO_START_ZOOM });
+  }
+}
+
+function switchToMicro(lat, lng) {
+  isMicroView = true;
+  initOrUpdateMap(lat, lng);
+  
+  document.getElementById('c').style.opacity = '0';
+  document.getElementById('c').style.pointerEvents = 'none';
+  document.getElementById('ui-container').style.opacity = '0';
+  
+  document.getElementById('map-container').style.opacity = '1';
+  document.getElementById('map-container').style.pointerEvents = 'auto';
+}
+
+function switchToMacro() {
+  isMicroView = false;
+  
+  document.getElementById('c').style.opacity = '1';
+  document.getElementById('c').style.pointerEvents = 'auto';
+  document.getElementById('ui-container').style.opacity = '1';
+  
+  document.getElementById('map-container').style.opacity = '0';
+  document.getElementById('map-container').style.pointerEvents = 'none';
+  
+  orbit.radius = MACRO_MIN_RADIUS + 0.05; 
+  updateCamera();
+}
+
+// ==========================================
+// MACRO (3D THREE.JS) SETUP
+// ==========================================
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.0015, 1000);
+
+const TARGET_CONFIGS = {
+  earth: { minRadius: MACRO_MIN_RADIUS, maxRadius: 20.0, defaultRadius: 3.1, discStart: 1.42, earthScale: 1.0 },
+  moon:  { minRadius: 0.08,  maxRadius: 20.0, defaultRadius: 0.35, discStart: 0.12, earthScale: 0.25 },
+  sun:   { minRadius: 0.15,  maxRadius: 35.0, defaultRadius: 4.5, discStart: 0.3, earthScale: 1.0 }
+};
+
+let currentTargetName = 'earth';
+let currentConfig = TARGET_CONFIGS.earth;
+let dynamicCenter = new THREE.Vector3(0, 0, 0);
+
+// FLIGHT VARIABLES
+const flight = { 
+  active: false, 
+  startTime: 0, 
+  duration: 2500, 
+  startRadius: 0, 
+  endRadius: 0, 
+  startCenter: new THREE.Vector3(), 
+  endCenterName: '', 
+  startEarthScale: 1.0,
+  startTheta: 0,
+  endTheta: 0,
+  startPhi: 0,
+  endPhi: 0
+};
+
+const ORBIT_ZOOM_SPEED = 0.0015;
+const orbit = { radius: currentConfig.defaultRadius, theta: 0, phi: 0.22 };
+
+function updateCamera() {
+  const r = orbit.radius; const cp = Math.cos(orbit.phi);
+  camera.position.set(dynamicCenter.x + Math.sin(orbit.theta) * cp * r, dynamicCenter.y + Math.sin(orbit.phi) * r, dynamicCenter.z + Math.cos(orbit.theta) * cp * r);
+  camera.lookAt(dynamicCenter);
+}
+updateCamera();
+
+function clamp01(v) { return Math.max(0, Math.min(1, v)); }
+function zoomPanSensitivity() { const zoomIn = clamp01((currentConfig.maxRadius - orbit.radius) / (currentConfig.maxRadius - currentConfig.minRadius)); return 1.0 - zoomIn * 0.82; }
+function zoomMassFactor() { const closeBlend = clamp01((currentConfig.discStart - orbit.radius) / (currentConfig.discStart - currentConfig.minRadius)); return 1.0 + closeBlend * 0.5; }
+
+// ===== STARS =====
+const starsGeom = new THREE.BufferGeometry(); const starCount = 4000; const starPositions = new Float32Array(starCount * 3); const starColors = new Float32Array(starCount * 3);
+for (let i = 0; i < starCount; i++) {
+  const radius = 35 + Math.random() * 50; const theta = Math.random() * Math.PI * 2; const phi = Math.acos(2 * Math.random() - 1);
+  starPositions[i * 3] = radius * Math.sin(phi) * Math.cos(theta); starPositions[i * 3 + 1] = radius * Math.cos(phi); starPositions[i * 3 + 2] = radius * Math.sin(phi) * Math.sin(theta);
+  const depthStr = 1.0 - ((radius - 35) / 50); const intensity = 0.15 + 0.85 * Math.pow(depthStr, 2.5);
+  starColors[i * 3] = 0.85 * intensity + 0.15 * depthStr; starColors[i * 3 + 1] = 0.90 * intensity + 0.10 * depthStr; starColors[i * 3 + 2] = 1.00 * intensity;
+}
+starsGeom.setAttribute('position', new THREE.BufferAttribute(starPositions, 3)); starsGeom.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
+scene.add(new THREE.Points(starsGeom, new THREE.PointsMaterial({ size: 0.22, vertexColors: true, transparent: true, opacity: 1.0, sizeAttenuation: true, blending: THREE.AdditiveBlending, depthWrite: false })));
+
+// ===== MILKY WAY =====
+const milkyWayGroup = new THREE.Group();
+const mwSphereMat = new THREE.ShaderMaterial({
+  vertexShader: `varying vec3 vPos; void main() { vPos = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: `varying vec3 vPos; float hash(vec3 p) { p = fract(p * 0.3183099 + .1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); } float noise(vec3 x) { vec3 i = floor(x); vec3 f = fract(x); f = f * f * (3.0 - 2.0 * f); return mix(mix(mix(hash(i+vec3(0,0,0)), hash(i+vec3(1,0,0)), f.x), mix(hash(i+vec3(0,1,0)), hash(i+vec3(1,1,0)), f.x), f.y), mix(mix(hash(i+vec3(0,0,1)), hash(i+vec3(1,0,1)), f.x), mix(hash(i+vec3(0,1,1)), hash(i+vec3(1,1,1)), f.x), f.y), f.z); } float fbm(vec3 p) { float f = 0.0; float amp = 0.5; for(int i=0; i<4; i++){ f += amp * noise(p); p *= 2.0; amp *= 0.5; } return f; } void main() { vec3 nPos = normalize(vPos); float lat = asin(nPos.y); float lon = atan(nPos.z, nPos.x); float isCore = exp(-pow(lon, 2.0) * 0.5); float thickness = 4.0 - 1.5 * isCore; float band = exp(-pow(abs(lat) * thickness, 2.0)); float n = fbm(nPos * 15.0); float dust = fbm(nPos * 30.0 + vec3(10.0)); float rift = smoothstep(0.3, 0.7, dust); band *= (0.4 + 0.6 * n) * (1.0 - rift * 0.5 * exp(-abs(lat)*10.0)); vec3 coreColor = vec3(1.0, 0.8, 0.6); vec3 edgeColor = vec3(0.08, 0.15, 0.35); vec3 color = mix(edgeColor, coreColor, isCore * band); gl_FragColor = vec4(color * band * 0.9, band * 0.6); }`,
+  transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.BackSide
+});
+milkyWayGroup.add(new THREE.Mesh(new THREE.SphereGeometry(300, 64, 64), mwSphereMat));
+
+const mwPointsGeo = new THREE.BufferGeometry(); const mwPointCount = 40000; const mwPos = new Float32Array(mwPointCount * 3); const mwColors = new Float32Array(mwPointCount * 3);
+for (let i = 0; i < mwPointCount; i++) {
+  let l = Math.random() * Math.PI * 2; if (Math.random() > 0.6) l = (Math.random() - 0.5) * 1.5; 
+  const isCore = Math.exp(-Math.pow(l, 2.0) * 0.5); const spread = 0.12 + 0.1 * isCore; const b = (Math.random() + Math.random() + Math.random() - 1.5) * spread;
+  mwPos[i*3] = 250 * Math.cos(b) * Math.cos(l); mwPos[i*3+1] = 250 * Math.sin(b); mwPos[i*3+2] = 250 * Math.cos(b) * Math.sin(l);
+  const intensity = 0.3 + Math.random() * 0.7;
+  if (isCore > 0.5 && Math.random() > 0.3) { mwColors[i*3] = 1.0 * intensity; mwColors[i*3+1] = 0.85 * intensity; mwColors[i*3+2] = 0.7 * intensity; } 
+  else { mwColors[i*3] = 0.6 * intensity; mwColors[i*3+1] = 0.8 * intensity; mwColors[i*3+2] = 1.0 * intensity; }
+}
+mwPointsGeo.setAttribute('position', new THREE.BufferAttribute(mwPos, 3)); mwPointsGeo.setAttribute('color', new THREE.BufferAttribute(mwColors, 3));
+milkyWayGroup.add(new THREE.Points(mwPointsGeo, new THREE.PointsMaterial({ size: 0.25, vertexColors: true, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false })));
+milkyWayGroup.applyMatrix4(new THREE.Matrix4().makeBasis(
+  new THREE.Vector3(-0.0548, -0.4941, -0.8676), new THREE.Vector3(-0.8734, 0.4569, -0.1749), new THREE.Vector3(0.4838, 0.7396, -0.4688)
+));
+scene.add(milkyWayGroup);
+
+// ===== SUN =====
+const sun = new THREE.DirectionalLight(0xffffff, 1.35); sun.position.set(8, 2.5, 0); scene.add(sun); scene.add(new THREE.AmbientLight(0xffffff, 0.18));
+const sunGroup = new THREE.Group();
+const sunCore = new THREE.Mesh(new THREE.SphereGeometry(0.115, 40, 40), new THREE.MeshBasicMaterial({ color: 0xfff8de })); sunGroup.add(sunCore);
+const size = 256; const canvasGlow = document.createElement('canvas'); canvasGlow.width = size; canvasGlow.height = size; const ctx = canvasGlow.getContext('2d');
+const gradient = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
+gradient.addColorStop(0, 'rgba(255,255,235,1)'); gradient.addColorStop(0.16, 'rgba(255,245,200,0.95)'); gradient.addColorStop(0.34, 'rgba(255,228,120,0.60)'); gradient.addColorStop(0.62, 'rgba(255,216,90,0.18)'); gradient.addColorStop(1, 'rgba(255,210,70,0)');
+ctx.fillStyle = gradient; ctx.fillRect(0,0,size,size);
+const sunGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvasGlow), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+sunGlow.scale.set(1.28, 1.28, 1); sunGroup.add(sunGlow);
+const raysGroup = new THREE.Group();
+[0, Math.PI/5, -Math.PI/5, Math.PI*2/5, -Math.PI*2/5].forEach((angle, i) => {
+  const ray = new THREE.Mesh(new THREE.PlaneGeometry(i === 0 ? 0.48 : 0.34, i === 0 ? 0.010 : 0.007), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: i === 0 ? 0.95 : 0.8, blending: THREE.AdditiveBlending, depthWrite: false }));
+  ray.rotation.z = angle; raysGroup.add(ray);
+});
+sunGroup.add(raysGroup); sunGroup.position.copy(sun.position.clone().normalize().multiplyScalar(9.5)); scene.add(sunGroup);
+
+// ===== MOON =====
+const moonOrbitGroup = new THREE.Group(); scene.add(moonOrbitGroup);
+let moon = null; const moonDistance = 1.72;
+function degToRad(deg) { return deg * Math.PI / 180; } function normalizeDeg(deg) { return ((deg % 360) + 360) % 360; }
+function getApproxMoonScenePosition(distance = moonDistance) {
+  const d = (new Date().getTime() - Date.UTC(2000, 0, 1, 12, 0, 0)) / 86400000;
+  const sunMeanAnomaly = normalizeDeg(357.529 + 0.98560028 * d); const sunLongitude = normalizeDeg(normalizeDeg(280.459 + 0.98564736 * d) + 1.915 * Math.sin(degToRad(sunMeanAnomaly)) + 0.020 * Math.sin(degToRad(2 * sunMeanAnomaly)));
+  const L = normalizeDeg(218.316 + 13.176396 * d); const Mm = normalizeDeg(134.963 + 13.064993 * d); const D = normalizeDeg(297.850 + 12.190749 * d); const F = normalizeDeg(93.272 + 13.229350 * d);        
+  const moonLongitude = normalizeDeg(L + 6.289 * Math.sin(degToRad(Mm)) + 1.274 * Math.sin(degToRad(2 * D - Mm)) + 0.658 * Math.sin(degToRad(2 * D)) + 0.214 * Math.sin(degToRad(2 * Mm)) - 0.186 * Math.sin(degToRad(sunMeanAnomaly)));
+  const moonLatitude = 5.128 * Math.sin(degToRad(F)) + 0.280 * Math.sin(degToRad(Mm + F)) + 0.277 * Math.sin(degToRad(Mm - F)) + 0.173 * Math.sin(degToRad(2 * D - F));
+  const elongation = degToRad(normalizeDeg(moonLongitude - sunLongitude)); const latRad = degToRad(moonLatitude);
+  const sunDir = sun.position.clone().normalize(); let orbitRight = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), sunDir).normalize(); if (orbitRight.lengthSq() < 0.0001) orbitRight = new THREE.Vector3(1, 0, 0);
+  const orbitUp = new THREE.Vector3().crossVectors(sunDir, orbitRight).normalize();
+  return sunDir.clone().multiplyScalar(Math.cos(elongation)).add(orbitRight.clone().multiplyScalar(Math.sin(elongation))).clone().multiplyScalar(Math.cos(latRad)).add(orbitUp.clone().multiplyScalar(Math.sin(latRad))).normalize().multiplyScalar(distance);
+}
+const loader = new THREE.TextureLoader();
+moon = new THREE.Mesh(new THREE.SphereGeometry(0.072, 48, 48), new THREE.MeshPhongMaterial({ map: loader.load('https://threejs.org/examples/textures/planets/moon_1024.jpg'), shininess: 2 }));
+moonOrbitGroup.add(moon);
+
+// ===== EARTH =====
+const earthGroup = new THREE.Group(); scene.add(earthGroup);
+const earth = new THREE.Mesh(new THREE.SphereGeometry(1, 128, 128), new THREE.MeshPhongMaterial({ map: loader.load('https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg'), normalMap: loader.load('https://threejs.org/examples/textures/planets/earth_normal_2048.jpg'), normalScale: new THREE.Vector2(0.85, 0.85), specularMap: loader.load('https://threejs.org/examples/textures/planets/earth_specular_2048.jpg'), shininess: 12, specular: new THREE.Color(0x111111) }));
+earthGroup.add(earth);
+const nightMaterial = new THREE.ShaderMaterial({ uniforms: { nightMap: { value: loader.load('https://unpkg.com/three-globe/example/img/earth-night.jpg') }, lightDir: { value: new THREE.Vector3(1, 0, 0) }, uMode: { value: 0.0 } }, vertexShader: `varying vec2 vUv; varying vec3 vNormalW; void main() { vUv = uv; vNormalW = normalize(mat3(modelMatrix) * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`, fragmentShader: `uniform sampler2D nightMap; uniform vec3 lightDir; uniform float uMode; varying vec2 vUv; varying vec3 vNormalW; void main() { float lDot = dot(normalize(vNormalW), normalize(lightDir)); gl_FragColor = vec4(texture2D(nightMap, vUv).rgb, mix(smoothstep(0.2, -0.2, lDot), 1.0, uMode)); }`, transparent: true, blending: THREE.NormalBlending, depthWrite: false });
+earthGroup.add(new THREE.Mesh(new THREE.SphereGeometry(1.0015, 128, 128), nightMaterial));
+const atmosphereMaterial = new THREE.ShaderMaterial({ uniforms: { lightDir: { value: new THREE.Vector3(1, 0, 0) } }, vertexShader: `varying vec3 vNormalView; varying vec3 vNormalWorld; void main() { vNormalView = normalize(normalMatrix * normal); vNormalWorld = normalize(mat3(modelMatrix) * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`, fragmentShader: `uniform vec3 lightDir; varying vec3 vNormalView; varying vec3 vNormalWorld; void main() { float fresnel = pow(1.0 - max(0.0, dot(vNormalView, vec3(0.0, 0.0, 1.0))), 2.8); float lDot = dot(normalize(vNormalWorld), normalize(lightDir)); gl_FragColor = vec4(mix(vec3(1.5, 0.5, 0.1), vec3(0.3, 0.6, 1.0), smoothstep(-0.15, 0.4, lDot)), fresnel * smoothstep(-0.05, 0.2, lDot) * 1.2); }`, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.FrontSide });
+earthGroup.add(new THREE.Mesh(new THREE.SphereGeometry(1.032, 128, 128), atmosphereMaterial));
+const auroraMaterial = new THREE.ShaderMaterial({ uniforms: { time: { value: 0 }, lightDir: { value: new THREE.Vector3(1, 0, 0) }, uMode: { value: 0.0 } }, vertexShader: `varying vec3 vPos; varying vec3 vNormalWorld; void main() { vPos = position; vNormalWorld = normalize(mat3(modelMatrix) * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`, fragmentShader: `uniform float time; uniform vec3 lightDir; uniform float uMode; varying vec3 vPos; varying vec3 vNormalWorld; float hash(vec3 p) { p = fract(p * 0.3183099 + .1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); } float noise(vec3 x) { vec3 i = floor(x); vec3 f = fract(x); f = f * f * (3.0 - 2.0 * f); return mix(mix(mix(hash(i+vec3(0,0,0)), hash(i+vec3(1,0,0)), f.x), mix(hash(i+vec3(0,1,0)), hash(i+vec3(1,1,0)), f.x), f.y), mix(mix(hash(i+vec3(0,0,1)), hash(i+vec3(1,0,1)), f.x), mix(hash(i+vec3(0,1,1)), hash(i+vec3(1,1,1)), f.x), f.y), f.z); } float fbm(vec3 p) { float f = 0.0; float amp = 0.5; for(int i=0; i<4; i++){ f += amp * noise(p); p *= 2.0; amp *= 0.5; } return f; } void main() { vec3 nPos = normalize(vPos); float lat = abs(nPos.y); float band = smoothstep(0.78, 0.88, lat) * smoothstep(0.98, 0.90, lat); if (band <= 0.0) discard; float n1 = fbm(vec3(nPos.x * 20.0, nPos.y * 5.0, nPos.z * 20.0) + vec3(time * 0.12, 0, 0)); float n2 = fbm(vec3(nPos.x * 40.0, nPos.y * 10.0, nPos.z * 40.0) - vec3(0, 0, time * 0.22)); float cur = smoothstep(0.4, 0.75, n1 * n2 + n2 * 0.45); gl_FragColor = vec4(mix(vec3(0.1, 1.0, 0.3), vec3(1.0, 0.2, 0.8), n1 * 1.5), band * cur * mix(smoothstep(0.1, -0.2, dot(normalize(vNormalWorld), normalize(lightDir))), 1.0, uMode) * 0.95); }`, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.FrontSide });
+earthGroup.add(new THREE.Mesh(new THREE.SphereGeometry(1.02, 128, 128), auroraMaterial));
+
+function updateEarthSpin() {
+  const now = new Date();
+  earthGroup.rotation.y = (((now.getUTCHours() + now.getUTCMinutes() / 60 + now.getUTCSeconds() / 3600) / 24) * Math.PI * 2) - Math.PI;
+}
+updateEarthSpin();
+
+// ===== NEW DROPDOWN UI LOGIC =====
+const targetBtn = document.getElementById('target-btn');
+const dropdownMenu = document.getElementById('dropdown-menu');
+const dropdownItems = document.querySelectorAll('.dropdown-item');
+
+const bodyIcons = { earth: '🌍', moon: '<span class="gray-moon">🌕</span>', sun: '☀️' };
+const bodyNames = { earth: 'Earth', moon: 'Moon', sun: 'Sun' };
+
+targetBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  dropdownMenu.classList.toggle('show');
+});
+
+window.addEventListener('click', () => {
+  dropdownMenu.classList.remove('show');
+});
+
+function getTargetPosition(name) {
+  if (name === 'earth') return new THREE.Vector3(0, 0, 0);
+  if (name === 'sun') return sun.position.clone();
+  if (name === 'moon' && moon) return moon.position.clone();
+  return new THREE.Vector3(0, 0, 0);
+}
+
+function flyToTarget(targetName) {
+  if (targetName === currentTargetName) return;
+  
+  flight.active = true; 
+  flight.startTime = performance.now(); 
+  flight.duration = 2500; // Extra time to handle the sequential pan
+  flight.startRadius = orbit.radius; 
+  flight.endRadius = TARGET_CONFIGS[targetName].defaultRadius; 
+  flight.startCenter.copy(dynamicCenter); 
+  flight.endCenterName = targetName; 
+  flight.startEarthScale = earthGroup.scale.x;
+  
+  flight.startTheta = orbit.theta;
+  flight.startPhi = orbit.phi;
+  
+  const tPos = getTargetPosition(targetName);
+  
+  // Calculate destination angles
+  if (targetName === 'moon') {
+    flight.endTheta = Math.atan2(tPos.x, tPos.z) + 0.4;
+    flight.endPhi = 0.15;
+  } else if (targetName === 'sun') {
+    flight.endTheta = Math.atan2(tPos.x, tPos.z) + 0.3;
+    flight.endPhi = 0.1;
+  } else {
+    // When returning to Earth, align camera so Sun illuminates the terminator
+    flight.endTheta = Math.atan2(sun.position.x, sun.position.z) - 0.6;
+    flight.endPhi = 0.25;
+  }
+  
+  // Safe math to take the shortest rotation path
+  let dTheta = flight.endTheta - flight.startTheta;
+  while (dTheta > Math.PI) dTheta -= Math.PI * 2;
+  while (dTheta < -Math.PI) dTheta += Math.PI * 2;
+  flight.endTheta = flight.startTheta + dTheta;
+
+  currentTargetName = targetName; 
+  currentConfig = TARGET_CONFIGS[targetName];
+}
+
+dropdownItems.forEach(item => {
+  item.addEventListener('click', (e) => {
+    const target = e.target.closest('.dropdown-item').dataset.target;
+    if (target) {
+      flyToTarget(target);
+      targetBtn.innerHTML = `${bodyIcons[target]} ${bodyNames[target]} ▾`;
+      dropdownItems.forEach(i => i.classList.remove('active'));
+      e.target.closest('.dropdown-item').classList.add('active');
+    }
+  });
+});
+
+// ===== PANNING INTERACTION =====
+let dragging = false, lastX = 0, lastY = 0; 
+const raycaster = new THREE.Raycaster(); 
+const mouse = new THREE.Vector2(0,0);
+
+canvas.addEventListener('pointerdown', (e) => {
+  if (flight.active || isMicroView) return;
+  dragging = true; lastX = e.clientX; lastY = e.clientY;
+});
+
+canvas.addEventListener('pointermove', (e) => {
+  mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+  if (!dragging || flight.active || isMicroView) return;
+  const dx = e.clientX - lastX, dy = e.clientY - lastY; const panSpeed = zoomPanSensitivity() / zoomMassFactor();
+  orbit.theta -= dx * 0.005 * panSpeed; orbit.phi += dy * 0.004 * panSpeed; orbit.phi = Math.max(-1.25, Math.min(1.25, orbit.phi));
+  lastX = e.clientX; lastY = e.clientY; updateCamera();
+});
+
+canvas.addEventListener('pointerup', () => { dragging = false; });
+canvas.addEventListener('pointerleave', () => { dragging = false; });
+
+// ===== THE CENTER-SYNC ZOOM TRIGGER =====
+function getScreenCenterLatLng() {
+  raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+  const intersects = raycaster.intersectObject(earth);
+  if (intersects.length > 0) {
+    const pt = intersects[0].point.clone();
+    earthGroup.worldToLocal(pt);
+    pt.normalize();
+    const lat = Math.asin(pt.y) * (180 / Math.PI);
+    let lng = Math.atan2(pt.z, -pt.x) * (180 / Math.PI) - 180;
+    while (lng < -180) lng += 360;
+    while (lng > 180) lng -= 360;
+    return { lat, lng };
+  }
+  return null;
+}
+
+canvas.addEventListener('wheel', (e) => {
+  if (flight.active || isMicroView) return;
+  e.preventDefault();
+  
+  const zoomAmount = (e.deltaY * ORBIT_ZOOM_SPEED) / zoomMassFactor();
+  orbit.radius += zoomAmount;
+  
+  if (currentTargetName === 'earth') {
+    const panStrength = 0.6; 
+    orbit.theta -= mouse.x * zoomAmount * panStrength;
+    orbit.phi -= mouse.y * zoomAmount * panStrength;
+  }
+  
+  if (currentTargetName === 'earth' && orbit.radius <= currentConfig.minRadius && e.deltaY < 0) {
+    const loc = getScreenCenterLatLng();
+    if (loc) {
+      switchToMicro(loc.lat, loc.lng);
+      return;
+    }
+  }
+  
+  orbit.radius = Math.max(currentConfig.minRadius, Math.min(currentConfig.maxRadius, orbit.radius));
+  updateCamera();
+}, { passive: false });
+
+window.addEventListener('resize', () => {
+  renderer.setSize(window.innerWidth, window.innerHeight); camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); updateCamera();
+  if (streetMap) streetMap.resize();
+});
+
+// ===== ANIMATION =====
+let t = 0;
+function animate() {
+  requestAnimationFrame(animate);
+  updateEarthSpin();
+
+  if (flight.active) {
+    const elapsed = performance.now() - flight.startTime;
+    let p = Math.min(elapsed / flight.duration, 1.0);
+    
+    // SEQUENTIAL ANIMATION: 
+    // 0% to 65% is Flight (Moving closer/further)
+    let flightP = Math.min(p / 0.65, 1.0);
+    flightP = flightP * flightP * (3 - 2 * flightP); 
+    
+    // 65% to 100% is Panning (Turning the camera to frame Earth)
+    let panP = Math.max(0, (p - 0.65) / 0.35);
+    panP = panP * panP * (3 - 2 * panP); 
+    
+    // 1. Move position
+    const endPos = getTargetPosition(flight.endCenterName);
+    dynamicCenter.lerpVectors(flight.startCenter, endPos, flightP);
+    orbit.radius = flight.startRadius + (flight.endRadius - flight.startRadius) * flightP;
+    
+    const currentScale = flight.startEarthScale + (TARGET_CONFIGS[flight.endCenterName].earthScale - flight.startEarthScale) * flightP;
+    earthGroup.scale.setScalar(currentScale);
+    
+    // 2. Rotate camera (only happens during the pan phase)
+    orbit.theta = flight.startTheta + (flight.endTheta - flight.startTheta) * panP;
+    orbit.phi = flight.startPhi + (flight.endPhi - flight.startPhi) * panP;
+
+    if (p >= 1.0) flight.active = false;
+  } else {
+    dynamicCenter.copy(getTargetPosition(currentTargetName));
+    earthGroup.scale.setScalar(TARGET_CONFIGS[currentTargetName].earthScale);
+  }
+
+  nightMaterial.uniforms.lightDir.value.copy(sun.position).normalize();
+  atmosphereMaterial.uniforms.lightDir.value.copy(sun.position).normalize();
+  auroraMaterial.uniforms.lightDir.value.copy(sun.position).normalize();
+  auroraMaterial.uniforms.time.value = t; nightMaterial.uniforms.uMode.value = 0.0; auroraMaterial.uniforms.uMode.value = 0.0; t += 0.04;
+
+  const sunPulse = 1 + Math.sin(t * 0.55) * 0.035; sunGlow.scale.set(1.28 * sunPulse, 1.28 * sunPulse, 1); raysGroup.rotation.z += 0.0008;
+
+  if (moon) {
+    moon.position.copy(getApproxMoonScenePosition());
+    moon.lookAt(0,0,0); moon.rotateY(Math.PI);
+  }
+
+  updateCamera();
+  if (!isMicroView) renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>
