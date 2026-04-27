@@ -1271,7 +1271,7 @@ function createCroppedSunTexture(src) {
   return texture;
 }
 
-const sunDiskTexture = createCroppedSunTexture('sun_disk_2048.jpg');
+const sunDiskTexture = createCroppedSunTexture('./assets/sun_disk.jpg');
 const sunMaterial = new THREE.MeshBasicMaterial({ map: sunDiskTexture, color: 0xffffff });
 const sunCore = new THREE.Mesh(new THREE.SphereGeometry(0.115, 96, 96), sunMaterial);
 sunGroup.add(sunCore);
@@ -2897,16 +2897,16 @@ function cleanCsvValue(value) {
 }
 
 function loadWorldCitiesDataset() {
-  console.log('🌍 Attempting to load local worldcities.csv...');
+  console.log('🌍 Attempting to load local ./assets/worldcities.csv...');
 
-  return fetch('worldcities.csv', { cache: 'no-store' })
+  return fetch('./assets/worldcities.csv', { cache: 'no-store' })
     .then(res => {
-      if (!res.ok) throw new Error(`worldcities.csv not found/readable: ${res.status}`);
+      if (!res.ok) throw new Error(`./assets/worldcities.csv not found/readable: ${res.status}`);
       return res.text();
     })
     .then(csv => {
       const lines = csv.split(/\r?\n/).filter(line => line.trim().length > 0);
-      if (lines.length < 2) throw new Error('worldcities.csv appears empty');
+      if (lines.length < 2) throw new Error('./assets/worldcities.csv appears empty');
 
       const header = parseCsvLine(lines[0]).map(h => cleanCsvValue(h).toLowerCase());
       const cityIdx = header.indexOf('city');
@@ -2918,7 +2918,7 @@ function loadWorldCitiesDataset() {
       const idIdx = header.indexOf('id');
 
       if (cityIdx < 0 || latIdx < 0 || lngIdx < 0 || popIdx < 0) {
-        throw new Error(`worldcities.csv missing required headers. Found: ${header.join(', ')}`);
+        throw new Error(`./assets/worldcities.csv missing required headers. Found: ${header.join(', ')}`);
       }
 
       const data = [];
@@ -2947,8 +2947,8 @@ function loadWorldCitiesDataset() {
         }
       }
 
-      console.log(`✅ Loaded local worldcities.csv: ${data.length.toLocaleString()} cities`);
-      console.log('✅ worldcities.csv first parsed city:', data[0]);
+      console.log(`✅ Loaded local ./assets/worldcities.csv: ${data.length.toLocaleString()} cities`);
+      console.log('✅ ./assets/worldcities.csv first parsed city:', data[0]);
       return data;
     });
 }
