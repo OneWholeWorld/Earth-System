@@ -484,7 +484,12 @@ const TARGET_CONFIGS = {
 let currentTargetName = 'earth';
 let currentConfig = TARGET_CONFIGS.earth;
 let dynamicCenter = new THREE.Vector3(0, 0, 0);
-const flight = { active:false, startTime:0, duration:2500, startRadius:0, endRadius:0, startCenter:new THREE.Vector3(), endCenterName:'earth', startEarthScale:1.0, startTheta:0, endTheta:0, startPhi:0, endPhi:0 };
+const flight = { active:false, startTime:0, duration:2500, startRadius:0, endRadius:0, startCenter:new THREE.Vector3(), endCenterName:'earth', startEarthScale:1.0, startTheta:0, endTheta:0, startPhi:0, endPhi:0, startSunFocus:0, endSunFocus:0 };
+
+function smoothstep01(value) {
+  const x = Math.max(0, Math.min(1, value));
+  return x * x * (3 - 2 * x);
+}
 
 function updateCamera() {
   const r = orbit.radius;
@@ -1315,6 +1320,9 @@ sunGroup.position.copy(sun.position.clone().normalize().multiplyScalar(9.5));
 scene.add(sunGroup);
 const SUN_BASE_SCALE = 1.0;
 const SUN_CINEMATIC_SCALE = 18.0;
+let sunFocusBlend = 0.0;
+const sunScaleTarget = new THREE.Vector3(SUN_BASE_SCALE, SUN_BASE_SCALE, SUN_BASE_SCALE);
+setSunTextureMode(false);
 
 // ===== MOON =====
 const moonOrbitGroup = new THREE.Group();
@@ -3506,12 +3514,14 @@ function flyToTarget(targetName) {
   }
   flight.active = true;
   flight.startTime = performance.now();
-  flight.duration = 2500;
+  flight.duration = targetName === 'sun' ? 3200 : 2500;
   flight.startRadius = orbit.radius;
   flight.endRadius = TARGET_CONFIGS[targetName].defaultRadius;
   flight.startCenter.copy(dynamicCenter);
   flight.endCenterName = targetName;
   flight.startEarthScale = earthGroup.scale.x;
+  flight.startSunFocus = sunFocusBlend;
+  flight.endSunFocus = targetName === 'sun' ? 1.0 : 0.0;
   flight.startTheta = orbit.theta;
   flight.startPhi = orbit.phi;
   const tPos = getTargetPosition(targetName);
@@ -4562,20 +4572,25 @@ function animate() {
     const elapsed = performance.now() - flight.startTime;
     let p = Math.min(elapsed / flight.duration, 1.0);
     let flightP = Math.min(p / 0.65, 1.0);
-    flightP = flightP * flightP * (3 - 2 * flightP);
+    flightP = smoothstep01(flightP);
     let panP = Math.max(0, (p - 0.65) / 0.35);
-    panP = panP * panP * (3 - 2 * panP);
+    panP = smoothstep01(panP);
+    const sunRevealP = flight.endCenterName === 'sun'
+      ? smoothstep01((p - 0.42) / 0.58)
+      : flightP;
     const endPos = getTargetPosition(flight.endCenterName);
     dynamicCenter.lerpVectors(flight.startCenter, endPos, flightP);
     orbit.radius = flight.startRadius + (flight.endRadius - flight.startRadius) * flightP;
     const currentScale = flight.startEarthScale + (TARGET_CONFIGS[flight.endCenterName].earthScale - flight.startEarthScale) * flightP;
     earthGroup.scale.setScalar(currentScale);
+    sunFocusBlend = flight.startSunFocus + (flight.endSunFocus - flight.startSunFocus) * sunRevealP;
     orbit.theta = flight.startTheta + (flight.endTheta - flight.startTheta) * panP;
     orbit.phi = flight.startPhi + (flight.endPhi - flight.startPhi) * panP;
     if (p >= 1.0) flight.active = false;
   } else {
     dynamicCenter.copy(getTargetPosition(currentTargetName));
     earthGroup.scale.setScalar(TARGET_CONFIGS[currentTargetName].earthScale);
+    sunFocusBlend = currentTargetName === 'sun' ? 1.0 : 0.0;
   }
 
   nightMaterial.uniforms.lightDir.value.copy(sun.position).normalize();
@@ -4723,11 +4738,13 @@ function animate() {
   t += 0.04;
 
   const sunPulse = 1 + Math.sin(t * 0.55) * 0.035;
-  setSunTextureMode(currentTargetName === 'sun');
+  const easedSunFocus = smoothstep01(sunFocusBlend);
+  setSunTextureMode(easedSunFocus > 0.28);
   sunGlow.scale.set(1.28 * sunPulse, 1.28 * sunPulse, 1);
-  const desiredSunScale = currentTargetName === 'sun' ? SUN_CINEMATIC_SCALE : SUN_BASE_SCALE;
-  sunGroup.scale.lerp(new THREE.Vector3(desiredSunScale, desiredSunScale, desiredSunScale), 0.08);
-  raysGroup.visible = currentTargetName !== 'sun';
+  const desiredSunScale = SUN_BASE_SCALE + (SUN_CINEMATIC_SCALE - SUN_BASE_SCALE) * easedSunFocus;
+  sunScaleTarget.set(desiredSunScale, desiredSunScale, desiredSunScale);
+  sunGroup.scale.lerp(sunScaleTarget, flight.active ? 0.18 : 0.08);
+  raysGroup.visible = easedSunFocus < 0.35;
   raysGroup.rotation.z += 0.0008;
 
   updateImpactRipple();
