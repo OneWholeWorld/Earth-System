@@ -319,6 +319,7 @@ body:not(.health-panel-mode) #healthClusterBtn{
 
 /* ===== TAKE254 HYBRID 3D / 2D MAPLIBRE TRANSITION ===== */
 #c {
+  touch-action: none;
   transition: opacity 0.6s ease-in-out;
   position: relative;
   z-index: 2;
@@ -3829,7 +3830,66 @@ function updateSelectedRingScaleForZoom() {
 let dragging = false, lastX = 0, lastY = 0, pointerMoved = false;
 const DRAG_THRESHOLD = 5;
 
+// ===== TAKE292 MOBILE TOUCH / PINCH ZOOM =====
+// Mobile behavior:
+// - one finger drag keeps existing globe rotation
+// - two-finger pinch zooms in/out
+// - existing 3D→2D transition threshold is unchanged
+let mobilePinching = false;
+let mobileLastPinchDistance = 0;
+
+function mobileTouchDistance(touches) {
+  if (!touches || touches.length < 2) return 0;
+  const dx = touches[0].clientX - touches[1].clientX;
+  const dy = touches[0].clientY - touches[1].clientY;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+function mobileTouchCenter(touches) {
+  return {
+    x: (touches[0].clientX + touches[1].clientX) * 0.5,
+    y: (touches[0].clientY + touches[1].clientY) * 0.5
+  };
+}
+
+function applyMobileZoom(deltaPixels, centerX, centerY) {
+  if (flight.active || isMicroView) return;
+
+  const syntheticDeltaY = -deltaPixels * 2.25;
+  const zoomAmount = (syntheticDeltaY * ORBIT_ZOOM_SPEED) / zoomMassFactor();
+
+  orbit.radius += zoomAmount;
+
+  if (currentTargetName === 'earth') {
+    const rect = canvas.getBoundingClientRect();
+    const x = ((centerX - rect.left) / rect.width) * 2 - 1;
+    const y = -((centerY - rect.top) / rect.height) * 2 + 1;
+
+    const panStrength = 0.6;
+    orbit.theta -= x * zoomAmount * panStrength;
+    orbit.phi -= y * zoomAmount * panStrength;
+  }
+
+  orbit.phi = Math.max(-1.25, Math.min(1.25, orbit.phi));
+
+  if (currentTargetName === 'earth' && orbit.radius <= currentConfig.minRadius && syntheticDeltaY < 0) {
+    const loc = getScreenCenterLatLng();
+    if (loc) {
+      switchToMicro(loc.lat, loc.lng);
+      return;
+    }
+  }
+
+  orbit.radius = Math.max(currentConfig.minRadius, Math.min(currentConfig.maxRadius, orbit.radius));
+  updateCamera();
+  markHealthShapeDirty();
+  applyCloseZoomDiscMode();
+  setHealthOverlayForView();
+}
+
+
 canvas.addEventListener('pointerdown', (e) => {
+  if (mobilePinching) return;
   if (isMicroView) return;
   pointerMoved = false;
   if (!elevatedMode && elevateTransitionActive) {
@@ -3838,6 +3898,7 @@ canvas.addEventListener('pointerdown', (e) => {
   dragging = true; pointerMoved = false; lastX = e.clientX; lastY = e.clientY;
 });
 canvas.addEventListener('pointermove', (e) => {
+  if (mobilePinching) return;
   const rect = canvas.getBoundingClientRect();
   mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
   mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
@@ -3905,6 +3966,42 @@ function getScreenCenterLatLng() {
   }
   return null;
 }
+
+
+canvas.addEventListener('touchstart', (e) => {
+  if (isMicroView) return;
+  if (e.touches.length === 2) {
+    e.preventDefault();
+    mobilePinching = true;
+    dragging = false;
+    pointerMoved = true;
+    mobileLastPinchDistance = mobileTouchDistance(e.touches);
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchmove', (e) => {
+  if (isMicroView) return;
+  if (e.touches.length === 2 && mobilePinching) {
+    e.preventDefault();
+    const dist = mobileTouchDistance(e.touches);
+    const center = mobileTouchCenter(e.touches);
+    const delta = dist - mobileLastPinchDistance;
+    mobileLastPinchDistance = dist;
+    applyMobileZoom(delta, center.x, center.y);
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchend', (e) => {
+  if (e.touches.length < 2) {
+    mobilePinching = false;
+    mobileLastPinchDistance = 0;
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchcancel', () => {
+  mobilePinching = false;
+  mobileLastPinchDistance = 0;
+}, { passive: false });
 
 canvas.addEventListener('wheel', (e) => {
   if (flight.active || isMicroView) return;
@@ -4366,8 +4463,8 @@ function animate() {
 
   const isConn = connectionsMode;
   
-  // Keep Energy mode cinematic. Health mode keeps the same Earth day/night view as default.
-  const targetMode = isConn ? 1.0 : 0.0;
+  // Keep Energy mode cinematic, but make Health mode surface more readable.
+  const targetMode = isConn ? 1.0 : (healthMode ? 0.69 : 0.0);
   nightMaterial.uniforms.uMode.value += (targetMode - nightMaterial.uniforms.uMode.value) * 0.1;
   auroraMaterial.uniforms.uMode.value = nightMaterial.uniforms.uMode.value;
 
