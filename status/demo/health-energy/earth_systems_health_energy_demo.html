@@ -435,7 +435,10 @@ backdrop-filter:blur(12px);
 "></div>
 <div id="cityHoverFlag"></div>
 <div id="flyPanel" style="position:fixed; bottom:20px; right:20px; width:260px; z-index:49; font:12px Inter,system-ui,sans-serif;">
-  <input id="flyInput" placeholder="Fly me to a city..." autocomplete="off" style="width:100%; box-sizing:border-box; padding:10px 12px; border-radius:999px; border:1px solid rgba(255,255,255,.16); outline:none; background:rgba(8,12,24,.82); color:#eef4ff; backdrop-filter:blur(12px); box-shadow:0 12px 34px rgba(0,0,0,.30);">
+  <div style="position:relative;">
+    <input id="flyInput" placeholder="Fly me to a city..." autocomplete="off" style="width:100%; box-sizing:border-box; padding:10px 40px 10px 12px; border-radius:999px; border:1px solid rgba(255,255,255,.16); outline:none; background:rgba(8,12,24,.82); color:#eef4ff; backdrop-filter:blur(12px); box-shadow:0 12px 34px rgba(0,0,0,.30);">
+    <button id="flyClearBtn" aria-label="Clear city search" title="Clear city search" style="display:none; position:absolute; right:6px; top:50%; transform:translateY(-50%); width:28px; height:28px; border:0; border-radius:999px; background:rgba(255,255,255,.11); color:#dbe7ff; font-size:18px; line-height:26px; cursor:pointer; padding:0;">×</button>
+  </div>
   <div id="flySuggestions" style="display:none; max-height:220px; overflow:auto; margin-top:7px; background:rgba(8,12,24,.90); border:1px solid rgba(255,255,255,.12); border-radius:14px; backdrop-filter:blur(14px); box-shadow:0 18px 44px rgba(0,0,0,.42);"></div>
 </div>
 
@@ -476,7 +479,7 @@ const DISC_RADIUS_FACTOR = 0.24;
 const TARGET_CONFIGS = {
   earth: { minRadius: 1.35, maxRadius: 20.0, defaultRadius: 3.1, discStart: DISC_MODE_START_RADIUS, earthScale: 1.0 },
   moon:  { minRadius: 0.08, maxRadius: 20.0, defaultRadius: 0.35, discStart: 0.12, earthScale: 0.25 },
-  sun:   { minRadius: 0.15, maxRadius: 35.0, defaultRadius: 4.5, discStart: 0.3, earthScale: 1.0 }
+  sun:   { minRadius: 0.15, maxRadius: 35.0, defaultRadius: 10.5, discStart: 0.3, earthScale: 0.24 }
 };
 let currentTargetName = 'earth';
 let currentConfig = TARGET_CONFIGS.earth;
@@ -502,6 +505,7 @@ let streetMap = null;
 const MACRO_MIN_RADIUS = 1.35;
 const MICRO_START_ZOOM = 4.5;
 const MICRO_EXIT_ZOOM = 4.3;
+const FLY_TO_CITY_2D_ZOOM = 10.4;
 
 function initOrUpdateMap(lat, lng) {
   if (typeof maplibregl === 'undefined') {
@@ -1230,8 +1234,51 @@ scene.add(sun);
 scene.add(new THREE.AmbientLight(0xffffff, 0.18));
 
 const sunGroup = new THREE.Group();
-const sunCore = new THREE.Mesh(new THREE.SphereGeometry(0.115, 40, 40), new THREE.MeshBasicMaterial({ color: 0xfff8de }));
+function createCroppedSunTexture(src) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 2048;
+  canvas.height = 1024;
+  const ctx = canvas.getContext('2d');
+  const fill = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+  fill.addColorStop(0, '#8f1304');
+  fill.addColorStop(0.45, '#ff6a18');
+  fill.addColorStop(1, '#ffd15c');
+  ctx.fillStyle = fill;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(2, 1);
+
+  const img = new Image();
+  img.onload = () => {
+    const crop = Math.min(img.width, img.height) * 0.52;
+    const sx = (img.width - crop) * 0.5;
+    const sy = (img.height - crop) * 0.5;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, sx, sy, crop, crop, 0, 0, canvas.width, canvas.height);
+    texture.needsUpdate = true;
+  };
+  img.src = src;
+
+  return texture;
+}
+
+const sunDiskTexture = createCroppedSunTexture('sun_disk_2048.jpg');
+const sunMaterial = new THREE.MeshBasicMaterial({ map: sunDiskTexture, color: 0xffffff });
+const sunCore = new THREE.Mesh(new THREE.SphereGeometry(0.115, 96, 96), sunMaterial);
 sunGroup.add(sunCore);
+let sunTextureModeActive = true;
+
+function setSunTextureMode(active) {
+  if (sunTextureModeActive === active) return;
+  sunTextureModeActive = active;
+  sunMaterial.map = active ? sunDiskTexture : null;
+  sunMaterial.color.set(active ? 0xffffff : 0xfff8de);
+  sunMaterial.needsUpdate = true;
+}
 
 const size = 256;
 const canvasGlow = document.createElement('canvas');
@@ -1266,6 +1313,8 @@ rayAngles.forEach((angle, i) => {
 sunGroup.add(raysGroup);
 sunGroup.position.copy(sun.position.clone().normalize().multiplyScalar(9.5));
 scene.add(sunGroup);
+const SUN_BASE_SCALE = 1.0;
+const SUN_CINEMATIC_SCALE = 18.0;
 
 // ===== MOON =====
 const moonOrbitGroup = new THREE.Group();
@@ -3436,9 +3485,13 @@ const dropdownItems = document.querySelectorAll('.dropdown-item');
 const bodyIcons = { earth: '🌍', moon: '<span class="gray-moon">🌕</span>', sun: '☀️' };
 const bodyNames = { earth: 'Earth', moon: 'Moon', sun: 'Sun' };
 
+function getSunCinematicAnchor() {
+  return sunGroup.position.clone().multiplyScalar(0.30);
+}
+
 function getTargetPosition(name) {
   if (name === 'earth') return new THREE.Vector3(0, 0, 0);
-  if (name === 'sun') return sun.position.clone();
+  if (name === 'sun') return getSunCinematicAnchor();
   if (name === 'moon' && moon) return moon.position.clone();
   return new THREE.Vector3(0, 0, 0);
 }
@@ -3463,7 +3516,7 @@ function flyToTarget(targetName) {
   flight.startPhi = orbit.phi;
   const tPos = getTargetPosition(targetName);
   if (targetName === 'moon') { flight.endTheta = Math.atan2(tPos.x, tPos.z) + 0.4; flight.endPhi = 0.15; }
-  else if (targetName === 'sun') { flight.endTheta = Math.atan2(tPos.x, tPos.z) + 0.3; flight.endPhi = 0.1; }
+  else if (targetName === 'sun') { flight.endTheta = 0.0; flight.endPhi = 0.05; }
   else { flight.endTheta = Math.atan2(sun.position.x, sun.position.z) - 0.6; flight.endPhi = 0.25; }
   let dTheta = flight.endTheta - flight.startTheta;
   while (dTheta > Math.PI) dTheta -= Math.PI * 2;
@@ -3506,11 +3559,13 @@ const tooltip = document.getElementById('pillarTooltip');
 const cityHoverFlag = document.getElementById('cityHoverFlag');
 const flyInput = document.getElementById('flyInput');
 const flySuggestions = document.getElementById('flySuggestions');
+const flyClearBtn = document.getElementById('flyClearBtn');
 
 function updateFlyPanelState() {
   const flyPanelEl = document.getElementById('flyPanel');
   const flyInputEl = document.getElementById('flyInput');
   const flySuggestionsEl = document.getElementById('flySuggestions');
+  const flyClearBtnEl = document.getElementById('flyClearBtn');
 
   if (!flyPanelEl || !flyInputEl) return;
 
@@ -3523,6 +3578,7 @@ function updateFlyPanelState() {
   flyInputEl.style.cursor = canUse ? 'text' : 'not-allowed';
   flyInputEl.placeholder = canUse ? 'Fly me to a city...' : 'Fly me to is available on Earth';
   if (!canUse && flySuggestionsEl) flySuggestionsEl.style.display = 'none';
+  if (flyClearBtnEl) flyClearBtnEl.style.display = canUse && flyInputEl.value ? 'block' : 'none';
 }
 
 
@@ -4247,6 +4303,59 @@ function selectPillarByDatum(d) {
   showTooltip(d, window.innerWidth / 2, window.innerHeight / 2);
 }
 
+function buildFly2DSelectionMeta(d) {
+  const target = findClosestPillar(d.lat, d.lng) || d;
+  const displayData = get2DHealthDisplayData();
+  const scaleData = displayData.length ? displayData : [target];
+  const totalPop = scaleData.reduce((sum, item) => sum + (Number.isFinite(item.pop) ? item.pop : 0), 0) || 1;
+  const rawShares = scaleData.map(item => clusteredGreenShare(item.lat, item.lng));
+  const rawWeightedAvg = rawShares.reduce((sum, share, idx) => {
+    const pop = Number.isFinite(scaleData[idx].pop) ? scaleData[idx].pop : 0;
+    return sum + share * pop;
+  }, 0) / totalPop;
+  const shareScale = rawWeightedAvg > 0 ? 0.20 / rawWeightedAvg : 1.0;
+  const greenShare = clamp01(clusteredGreenShare(target.lat, target.lng) * shareScale);
+  const pillarId = target.id || `${target.lat}_${target.lng}`;
+
+  return {
+    id: target.id || pillarId,
+    pillarId,
+    source: 'fly-to-city-2d',
+    city: target.city || target.placeLabel || target.cityAscii || null,
+    cityAscii: target.cityAscii || null,
+    adminName: target.adminName || null,
+    placeLabel: target.placeLabel || target.city || target.cityAscii || target.adminName || approxCityName(target.lat, target.lng),
+    isCluster: false,
+    clusterCount: 1,
+    lat: target.lat,
+    lng: target.lng,
+    pop: Number.isFinite(target.pop) ? target.pop : 0,
+    greenShare,
+    redShare: 1 - greenShare
+  };
+}
+
+function selectFlyDatumIn2D(d, attempt = 0) {
+  if (!d || !isMicroView || !streetMap) return;
+
+  if (!streetMap.isStyleLoaded || !streetMap.isStyleLoaded()) {
+    if (attempt < 90) requestAnimationFrame(() => selectFlyDatumIn2D(d, attempt + 1));
+    return;
+  }
+
+  streetMap.jumpTo({ center: [d.lng, d.lat], zoom: FLY_TO_CITY_2D_ZOOM });
+  upsert2DHealthLayer();
+
+  const meta = buildFly2DSelectionMeta(d);
+  selectedPillar = meta.pillarId;
+  selected2DHealthMeta = meta;
+  lastSelectedCityForOrigin = meta;
+
+  hideCityHoverFlag();
+  set2DSelectedHealthDisk(meta);
+  showTooltip(meta, Math.round(window.innerWidth * 0.50), Math.round(window.innerHeight * 0.50));
+}
+
 
 function flyToDatum(d) {
   if (!d) return;
@@ -4326,8 +4435,8 @@ function flyToDatum(d) {
           const found = findRenderedInstanceForDatum(targetData);
           if (found && found.meta) triggerImpactRipple(found.meta);
 
-          selectPillarByDatum(targetData);
-          lastSelectedCityForOrigin = targetData;
+          switchToMicro(targetData.lat, targetData.lng);
+          selectFlyDatumIn2D(targetData);
         }
 
         hideFlyPulseArc(2200);
@@ -4345,6 +4454,7 @@ function renderFlySuggestions(query) {
 
   const matches = findFlyMatches(query);
   flySuggestions.innerHTML = '';
+  updateFlyPanelState();
 
   if (!matches.length) {
     flySuggestions.style.display = 'none';
@@ -4396,6 +4506,7 @@ function setupFlySearch() {
 
   flyInput.addEventListener('input', () => {
     renderFlySuggestions(flyInput.value);
+    updateFlyPanelState();
   });
 
   flyInput.addEventListener('focus', () => {
@@ -4409,8 +4520,19 @@ function setupFlySearch() {
     }
   });
 
+  if (flyClearBtn) {
+    flyClearBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      flyInput.value = '';
+      flySuggestions.style.display = 'none';
+      updateFlyPanelState();
+      flyInput.focus();
+    });
+  }
+
   document.addEventListener('click', (e) => {
-    if (e.target === flyInput || flySuggestions.contains(e.target)) return;
+    if (e.target === flyInput || e.target === flyClearBtn || flySuggestions.contains(e.target)) return;
     flySuggestions.style.display = 'none';
   });
 
@@ -4601,7 +4723,11 @@ function animate() {
   t += 0.04;
 
   const sunPulse = 1 + Math.sin(t * 0.55) * 0.035;
+  setSunTextureMode(currentTargetName === 'sun');
   sunGlow.scale.set(1.28 * sunPulse, 1.28 * sunPulse, 1);
+  const desiredSunScale = currentTargetName === 'sun' ? SUN_CINEMATIC_SCALE : SUN_BASE_SCALE;
+  sunGroup.scale.lerp(new THREE.Vector3(desiredSunScale, desiredSunScale, desiredSunScale), 0.08);
+  raysGroup.visible = currentTargetName !== 'sun';
   raysGroup.rotation.z += 0.0008;
 
   updateImpactRipple();
@@ -4616,6 +4742,7 @@ function animate() {
 
   if (moon) {
     moon.position.copy(getApproxMoonScenePosition(moonDistance));
+    moon.scale.setScalar(1);
     orientMoonTowardEarth(moon);
   }
 
