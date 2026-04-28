@@ -1556,10 +1556,17 @@ function smoothstep(edge0, edge1, x) {
   return t * t * (3.0 - 2.0 * t);
 }
 
+function earthRelativeHealthRadius() {
+  if (currentTargetName === 'earth' || cinematicFlyActive) {
+    return Math.max(0.0001, camera.position.length());
+  }
+  return orbit.radius;
+}
+
 function closeZoomDiscBlend() {
   // 0 = full column height, 1 = flattened footprint disc.
   if (currentTargetName !== 'earth') return 0.0;
-  return 1.0 - smoothstep(DISC_MODE_FULL_RADIUS, DISC_MODE_START_RADIUS, orbit.radius);
+  return 1.0 - smoothstep(DISC_MODE_FULL_RADIUS, DISC_MODE_START_RADIUS, earthRelativeHealthRadius());
 }
 
 function markHealthShapeDirty() {
@@ -1570,7 +1577,8 @@ function shouldApplyHealthShapeUpdate() {
   if (!healthMode || healthTransitionActive || !healthColumnStacks.length) return false;
 
   const blend = closeZoomDiscBlend();
-  const radiusChanged = lastAppliedShapeRadius === null || Math.abs(orbit.radius - lastAppliedShapeRadius) > 0.00035;
+  const viewRadius = earthRelativeHealthRadius();
+  const radiusChanged = lastAppliedShapeRadius === null || Math.abs(viewRadius - lastAppliedShapeRadius) > 0.00035;
   const blendChanged = Math.abs(blend - lastAppliedDiscBlend) > 0.001;
 
   return healthShapeDirty || radiusChanged || blendChanged;
@@ -2514,7 +2522,7 @@ function applyCloseZoomDiscMode() {
   updateSelectedRingScaleForZoom();
 
   lastAppliedDiscBlend = blend;
-  lastAppliedShapeRadius = orbit.radius;
+  lastAppliedShapeRadius = earthRelativeHealthRadius();
   healthShapeDirty = false;
 }
 
