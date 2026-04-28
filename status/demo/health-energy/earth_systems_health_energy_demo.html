@@ -4041,24 +4041,11 @@ function applyMobileZoom(deltaPixels, centerX, centerY) {
 
   orbit.radius += zoomAmount;
 
-  if (currentTargetName === 'earth') {
-    const rect = canvas.getBoundingClientRect();
-    const x = ((centerX - rect.left) / rect.width) * 2 - 1;
-    const y = -((centerY - rect.top) / rect.height) * 2 + 1;
-
-    const panStrength = 0.6;
-    orbit.theta -= x * zoomAmount * panStrength;
-    orbit.phi -= y * zoomAmount * panStrength;
-  }
-
   orbit.phi = Math.max(-1.25, Math.min(1.25, orbit.phi));
 
   if (currentTargetName === 'earth' && orbit.radius <= currentConfig.minRadius && syntheticDeltaY < 0) {
     const loc = getScreenCenterLatLng();
-    if (loc) {
-      switchToMicro(loc.lat, loc.lng);
-      return;
-    }
+    if (loc) { switchToMicro(loc.lat, loc.lng); return; }
   }
 
   orbit.radius = Math.max(currentConfig.minRadius, Math.min(currentConfig.maxRadius, orbit.radius));
@@ -4148,7 +4135,6 @@ function getScreenCenterLatLng() {
   return null;
 }
 
-
 canvas.addEventListener('touchstart', (e) => {
   if (isMicroView) return;
   if (e.touches.length === 2) {
@@ -4189,11 +4175,6 @@ canvas.addEventListener('wheel', (e) => {
   e.preventDefault();
   const zoomAmount = (e.deltaY * ORBIT_ZOOM_SPEED) / zoomMassFactor();
   orbit.radius += zoomAmount;
-  if (currentTargetName === 'earth') {
-    const panStrength = 0.6;
-    orbit.theta -= mouse.x * zoomAmount * panStrength;
-    orbit.phi -= mouse.y * zoomAmount * panStrength;
-  }
   orbit.phi = Math.max(-1.25, Math.min(1.25, orbit.phi));
   if (currentTargetName === 'earth' && orbit.radius <= currentConfig.minRadius && e.deltaY < 0) {
     const loc = getScreenCenterLatLng();
