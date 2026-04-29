@@ -1,4 +1,4 @@
-# Friendship Earth Operating System
+# Spaceship Earth Operating System
 
 - Earth is the Stage.
 - Environment is the Set.
