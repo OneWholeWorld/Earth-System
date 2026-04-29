@@ -41,8 +41,6 @@ canvas{display:block}
   color:#ffffff;
 }
 
-
-
 #inspectPanel{
   position:fixed;
   top:16px;
@@ -1438,17 +1436,17 @@ function orientMoonTowardEarth(moonMesh) {
 }
 
 const loader = new THREE.TextureLoader();
-const moonTexture = loader.load('https://threejs.org/examples/textures/planets/moon_1024.jpg');
+const moonTexture = loader.load('./assets/textures/moon-8k.jpg');
 moon = new THREE.Mesh(new THREE.SphereGeometry(0.072, 48, 48), new THREE.MeshPhongMaterial({ map: moonTexture, shininess: 2 }));
 moonOrbitGroup.add(moon);
 moon.position.copy(getApproxMoonScenePosition(moonDistance));
 orientMoonTowardEarth(moon);
 
 // ===== EARTH =====
-const dayMap = loader.load('https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg');
-const nightMap = loader.load('https://unpkg.com/three-globe/example/img/earth-night.jpg');
-const normalMap = loader.load('https://threejs.org/examples/textures/planets/earth_normal_2048.jpg');
-const specMap = loader.load('https://threejs.org/examples/textures/planets/earth_specular_2048.jpg');
+const dayMap = loader.load('./assets/textures/earth-blue-marble.jpg');
+const nightMap = loader.load('./assets/textures/earth-black-marble-2016-8k.jpg');
+const normalMap = loader.load('./assets/textures/earth_normal_2048.jpg');
+const specMap = loader.load('./assets/textures/earth_specular_2048.jpg');
 
 const earthGroup = new THREE.Group();
 scene.add(earthGroup);
@@ -1471,7 +1469,10 @@ const nightMaterial = new THREE.ShaderMaterial({
   uniforms: { 
     nightMap: { value: nightMap }, 
     lightDir: { value: new THREE.Vector3(1, 0, 0) },
-    uMode: { value: 0.0 }
+    uMode: { value: 0.0 },
+    nightTint: { value: new THREE.Vector3(0.72, 0.88, 1.28) },
+    nightGamma: { value: 0.86 },
+    nightLift: { value: new THREE.Vector3(0.018, 0.026, 0.052) }
   },
   vertexShader: `
     varying vec2 vUv; varying vec3 vNormalW;
@@ -1485,6 +1486,9 @@ const nightMaterial = new THREE.ShaderMaterial({
     uniform sampler2D nightMap; 
     uniform vec3 lightDir; 
     uniform float uMode;
+    uniform vec3 nightTint;
+    uniform float nightGamma;
+    uniform vec3 nightLift;
     varying vec2 vUv; 
     varying vec3 vNormalW;
     
@@ -1493,6 +1497,7 @@ const nightMaterial = new THREE.ShaderMaterial({
       float nightAlpha = smoothstep(0.2, -0.2, lDot);
       float alpha = mix(nightAlpha, 1.0, uMode);
       vec3 nightColor = texture2D(nightMap, vUv).rgb;
+      nightColor = pow(nightColor * nightTint + nightLift, vec3(nightGamma));
       gl_FragColor = vec4(nightColor, alpha);
     }
   `,
@@ -2996,7 +3001,7 @@ function loadWorldCitiesDataset() {
 function loadFallbackPopulationDataset(reason) {
   console.warn('⚠️ Falling back to original population grid dataset:', reason);
 
-  return fetch('https://raw.githubusercontent.com/vasturiano/globe.gl/master/example/datasets/world_population.csv')
+  return fetch('./assets/data/world_population.csv')
     .then(res => res.text())
     .then(csv => {
       const lines = csv.split('\n').slice(1);
