@@ -1,4 +1,4 @@
-# Friendship Earth Operating System
+# Spaceship Earth Operating System
 
 - Earth is the Stage.
 - Environment is the Set.
@@ -7,7 +7,7 @@
 
 ## Goal
 
-Elevate Earth to a Paragon System and maintain it there.  
+Elevate Speaceship Earth to a Paragon System and maintain it there.  
 
 ## Needs
 
@@ -60,7 +60,7 @@ Elevate Earth to a Paragon System and maintain it there.
 - Every Goal has one or many Needs.
 - If the Needs are met then the Role can meet its Goal.
 - A Need is met by a Goal of another Role.
-- The Goal of a Role is to meet a Need taking the path of least action.
+- The Goal of a Role is to meet a Need taking the path of least or stationary action.
 
 ## Story
 
