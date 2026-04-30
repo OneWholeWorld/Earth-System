@@ -18,13 +18,24 @@ Keep these versions pinned. Upgrade deliberately after testing rather than using
 ## Textures
 
 - `textures/earth-blue-marble.jpg` from `https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg`
-- `textures/earth-black-marble-2016-8k.jpg`, an 8192x4096 app-friendly working copy of the Black Marble source from `https://science.nasa.gov/earth/earth-observatory/earth-at-night/maps/`
+- `textures/earth-night.jpg` from `https://unpkg.com/three-globe/example/img/earth-night.jpg`
 - `textures/moon-8k.jpg` from `https://commons.wikimedia.org/wiki/File:Solarsystemscope_texture_8k_moon.jpg`
 - `textures/earth_normal_2048.jpg` from `https://threejs.org/examples/textures/planets/earth_normal_2048.jpg`
 - `textures/earth_specular_2048.jpg` from `https://threejs.org/examples/textures/planets/earth_specular_2048.jpg`
 
 The Moon texture is by Solar System Scope and licensed CC-BY-4.0 via Wikimedia Commons.
-The Black Marble texture is from NASA Earth Observatory night-lights imagery.
+
+## Texture Experiment Notes
+
+We tried several Earth texture directions before settling back on the original pairing:
+
+- Solar System Scope 8K day/night maps were sharper, but the Earth felt flatter and less cinematic.
+- NASA SVS day imagery had impressive detail, but the baked-in clouds changed the mood too much for this demo.
+- NASA Blue Marble Next Generation cloud-free imagery was clean, but it lost some of the organic atmosphere of the original day map.
+- NASA Black Marble night imagery was technically strong, but the city lights felt too flat and separate from the planet.
+- The higher-resolution DMSP night map had more detail, both at full brightness and with a darker shader treatment, but it still felt more artificial than the original night side.
+
+The version we liked most is the original `earth-blue-marble.jpg` day texture with the original `earth-night.jpg` night texture and the simple release-file night shader. It feels more unified, warmer, and more one-with-nature than the higher-resolution experiments. If future us wants to revisit this, recreate the experiment as a temporary switcher and compare against this baseline before changing the default.
 
 ## Data
 

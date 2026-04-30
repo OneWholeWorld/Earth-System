@@ -1444,7 +1444,7 @@ orientMoonTowardEarth(moon);
 
 // ===== EARTH =====
 const dayMap = loader.load('./assets/textures/earth-blue-marble.jpg');
-const nightMap = loader.load('./assets/textures/earth-black-marble-2016-8k.jpg');
+const nightMap = loader.load('./assets/textures/earth-night.jpg');
 const normalMap = loader.load('./assets/textures/earth_normal_2048.jpg');
 const specMap = loader.load('./assets/textures/earth_specular_2048.jpg');
 
@@ -1469,10 +1469,7 @@ const nightMaterial = new THREE.ShaderMaterial({
   uniforms: { 
     nightMap: { value: nightMap }, 
     lightDir: { value: new THREE.Vector3(1, 0, 0) },
-    uMode: { value: 0.0 },
-    nightTint: { value: new THREE.Vector3(0.72, 0.88, 1.28) },
-    nightGamma: { value: 0.86 },
-    nightLift: { value: new THREE.Vector3(0.018, 0.026, 0.052) }
+    uMode: { value: 0.0 }
   },
   vertexShader: `
     varying vec2 vUv; varying vec3 vNormalW;
@@ -1486,9 +1483,6 @@ const nightMaterial = new THREE.ShaderMaterial({
     uniform sampler2D nightMap; 
     uniform vec3 lightDir; 
     uniform float uMode;
-    uniform vec3 nightTint;
-    uniform float nightGamma;
-    uniform vec3 nightLift;
     varying vec2 vUv; 
     varying vec3 vNormalW;
     
@@ -1497,7 +1491,6 @@ const nightMaterial = new THREE.ShaderMaterial({
       float nightAlpha = smoothstep(0.2, -0.2, lDot);
       float alpha = mix(nightAlpha, 1.0, uMode);
       vec3 nightColor = texture2D(nightMap, vUv).rgb;
-      nightColor = pow(nightColor * nightTint + nightLift, vec3(nightGamma));
       gl_FragColor = vec4(nightColor, alpha);
     }
   `,
