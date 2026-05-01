@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test:earth-core": "node tests/earth-core/run-earth-core-tests.mjs"
+    "test:earth-core": "node tests/earth-core/run-earth-core-tests.mjs",
+    "test:earth-health-energy": "node tests/earth-health-energy/run-earth-health-energy-tests.mjs"
   },
   "devDependencies": {
     "playwright": "^1.52.0"

@@ -847,6 +847,63 @@
     updateButtons();
   }
 
+  function getAppState() {
+    const selectedCity = selectedHealthMeta ? labelForCity(selectedHealthMeta) : null;
+    return {
+      energyMode,
+      healthMode,
+      healthOnlyPositive,
+      healthOnlyNegative,
+      healthClusterMode,
+      heightMinPercent,
+      heightMaxPercent,
+      healthCityCount: healthCities.length,
+      displayedHealthCityCount: displayedHealthCities.length,
+      healthGeoJSONFeatureCount: healthGeoJSON.features.length,
+      selectedCity,
+      selectedIsCluster: !!(selectedHealthMeta && selectedHealthMeta.isCluster),
+      selectedClusterCount: selectedHealthMeta ? selectedHealthMeta.clusterCount || 1 : 0,
+      selectedEnergyName: selectedEnergySystem ? selectedEnergySystem.name : null,
+      focusedEnergyName: focusedEnergySystem ? focusedEnergySystem.name : null,
+      elevatedEnergy,
+      energyLayerVisible: !!(energyLayer && energyLayer.threeObject && energyLayer.threeObject.visible),
+      healthLayerVisible: !!(healthLayer && healthLayer.threeObject && healthLayer.threeObject.visible),
+      fullPopulationMaxPop,
+      energySystemCount: energyLayer && energyLayer.systems ? energyLayer.systems.length : 0,
+      energySystems: energyLayer && energyLayer.systems ? energyLayer.systems.map(system => {
+        const world = new api.THREE.Vector3();
+        system.node.getWorldPosition(world);
+        const projected = world.clone().project(api.camera);
+        const rect = api.renderer.domElement.getBoundingClientRect();
+        return {
+          name: system.name,
+          state: system.state,
+          focused: system === focusedEnergySystem,
+          selected: system === selectedEnergySystem,
+          ringOpacity: system.ring.material.opacity,
+          domeColor: system.dome.material.color.getHexString(),
+          screenX: (projected.x * 0.5 + 0.5) * rect.width + rect.left,
+          screenY: (-projected.y * 0.5 + 0.5) * rect.height + rect.top,
+          visible: !!(energyLayer.threeObject && energyLayer.threeObject.visible)
+        };
+      }) : [],
+      displayedSample: displayedHealthCities.slice(0, 50).map(d => ({
+        id: d.id,
+        city: labelForCity(d),
+        lat: d.lat,
+        lng: d.lng,
+        pop: d.pop,
+        isCluster: !!d.isCluster,
+        clusterCount: d.clusterCount || 1,
+        height: 0.01 + populationNorm(d.pop) * 0.24
+      }))
+    };
+  }
+
+  window.EarthHealthEnergyApp = {
+    getState: getAppState
+  };
+
   async function boot(event) {
     api = event.detail.api;
     healthCities = await loadCities();
