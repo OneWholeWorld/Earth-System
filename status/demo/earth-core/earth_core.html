@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Earth System Core</title>
+<link rel="icon" href="data:,">
+<link href="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.css" rel="stylesheet">
+<style>
+html,body{margin:0;overflow:hidden;background:#000;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+canvas{display:block}
+#c{position:fixed;inset:0;z-index:2;cursor:grab;transition:opacity .6s ease}
+#c:active{cursor:grabbing}
+#map-container{position:fixed;inset:0;z-index:1;opacity:0;pointer-events:none;transition:opacity .6s ease;background:#000}
+body.micro-view #c{opacity:0;pointer-events:none}
+body.micro-view #map-container{opacity:1;pointer-events:auto}
+body.micro-view #ui-container{opacity:0;pointer-events:none}
+#ui-container{position:fixed;bottom:24px;left:24px;z-index:10;transition:opacity .5s ease}
+.dropdown{position:relative;display:inline-block}
+#target-btn{background:rgba(8,12,24,.65);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.15);border-radius:999px;padding:12px 20px;color:#eef4ff;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 4px 24px rgba(0,0,0,.4);transition:background .2s ease;display:flex;align-items:center;gap:8px;min-width:128px;justify-content:space-between}
+#target-btn:hover{background:rgba(255,255,255,.1)}
+.dropdown-content{display:none;position:absolute;bottom:100%;left:0;margin-bottom:12px;background:rgba(8,12,24,.85);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.15);border-radius:12px;min-width:150px;box-shadow:0 8px 32px rgba(0,0,0,.6);overflow:hidden;flex-direction:column}
+.dropdown-content.show{display:flex}
+.dropdown-item{padding:14px 20px;color:#eef4ff;font-size:14px;font-weight:500;cursor:pointer;transition:background .2s ease;display:flex;align-items:center;gap:10px}
+.dropdown-item:hover{background:rgba(255,255,255,.1)}
+.dropdown-item.active{color:#ffd700;background:rgba(255,215,0,.15)}
+.gray-moon{filter:grayscale(100%) brightness(1.2);display:inline-block}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="map-container"></div>
+
+<div id="ui-container">
+  <div class="dropdown">
+    <button id="target-btn">🌍 Earth ▾</button>
+    <div id="dropdown-menu" class="dropdown-content">
+      <div class="dropdown-item active" data-target="earth">🌍 Earth</div>
+      <div class="dropdown-item" data-target="moon"><span class="gray-moon">🌕</span> Moon</div>
+      <div class="dropdown-item" data-target="sun">☀️ Sun</div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+<script src="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.js"></script>
+<script src="./earth-core.js"></script>
+</body>
+</html>
