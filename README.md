@@ -31,6 +31,7 @@ Elevate Speaceship Earth to a Paragon System and maintain it there.
 
 ### Level Zero
 
+- [ ] Zero baggage
 - [ ] Zero cruelty
 - [ ] Zero secrets
 - [ ] Zero money
@@ -40,7 +41,6 @@ Elevate Speaceship Earth to a Paragon System and maintain it there.
 - [ ] Zero shame
 - [ ] Zero greed
 - [ ] Zero arrogance
-- [ ] Zero baggage
 - [ ] Zero obligation
 - [ ] Zero punishment
 - [ ] Zero regret
