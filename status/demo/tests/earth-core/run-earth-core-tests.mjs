@@ -227,10 +227,12 @@ test('target dropdown opens, selects Moon, Mars, and Sun, and emits targetchange
   ui = await page.evaluate(() => ({
     active: document.querySelector('.dropdown-item.active')?.dataset.target,
     buttonText: document.querySelector('#target-btn').textContent.trim(),
+    marsIconClass: document.querySelector('#target-btn .mars-disc')?.className || '',
     changes: window.__targetChanges
   }));
   assert.equal(ui.active, 'mars');
   assert.match(ui.buttonText, /Mars/);
+  assert.equal(ui.marsIconClass, 'mars-disc');
   assert.deepEqual(ui.changes, ['moon', 'mars']);
 
   await page.click('#target-btn');

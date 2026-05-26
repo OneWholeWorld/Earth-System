@@ -78,7 +78,9 @@
   }
 
   function labelForCity(d) {
-    return window.GeoNames.labelForPlace(d);
+    if (!d) return '';
+    const name = d.city || d.cityAscii || d.placeLabel || `${Number(d.lat).toFixed(2)}, ${Number(d.lng).toFixed(2)}`;
+    return d.adminName ? `${name}, ${d.adminName}` : name;
   }
 
   function normalizeSearch(value) {
@@ -132,7 +134,7 @@
       }
     }
     return Array.from(cells.values()).filter(d => d.pop && d.largestCity).map((d, i) => {
-      const labelBase = d.largestCity.placeLabel || d.largestCity.city || d.largestCity.cityAscii || d.largestCity.adminName || 'Region';
+      const labelBase = labelForCity(d.largestCity) || 'Region';
       const placeLabel = d.count > 1 ? `${labelBase} region` : labelBase;
       return {
         id: `cluster-${i}`,
@@ -140,9 +142,13 @@
         city: placeLabel,
         cityAscii: placeLabel,
         adminName: d.largestCity.adminName || null,
+        country: d.largestCity.country || null,
+        iso2: d.largestCity.iso2 || null,
         placeLabel,
-        lat: d.latSum / d.pop,
-        lng: d.lngSum / d.pop,
+        lat: d.largestCity.lat,
+        lng: d.largestCity.lng,
+        centroidLat: d.latSum / d.pop,
+        centroidLng: d.lngSum / d.pop,
         pop: d.pop,
         isCluster: d.count > 1,
         clusterCount: d.count
@@ -163,7 +169,9 @@
           lng: d.lng,
           pop: d.pop,
           popNorm: populationNorm(d.pop),
-          greenShare: healthShare(d.lat, d.lng)
+          greenShare: healthShare(d.lat, d.lng),
+          isCluster: !!d.isCluster,
+          clusterCount: d.clusterCount || 1
         }
       }))
     };
@@ -177,7 +185,7 @@
     healthControls.forEach(el => { el.style.display = mode === 'health' ? 'block' : 'none'; });
     energyControls.forEach(el => { el.style.display = mode === 'energy' ? 'block' : 'none'; });
     if (mode === 'health') {
-      els.inspectTitle.textContent = 'Health Filters';
+      els.inspectTitle.textContent = 'Manifest Filters';
       els.inspectSubtitle.textContent = 'Filter positive, negative, cluster, and column height.';
     } else {
       els.inspectTitle.textContent = payload ? payload.name : 'Inspect System';
@@ -206,7 +214,7 @@
     els.energyBtn.classList.toggle('active', energyMode);
     els.healthBtn.classList.toggle('active', healthMode);
     els.energyBtn.textContent = energyMode ? 'Hide Energy' : 'Show Energy';
-    els.healthBtn.textContent = healthMode ? 'Hide Health' : 'Show Health';
+    els.healthBtn.textContent = healthMode ? 'Hide Manifest' : 'Show Manifest';
     els.energyBtn.style.display = healthMode ? 'none' : 'block';
     els.healthBtn.style.display = energyMode ? 'none' : 'block';
     els.healthPositiveBtn.classList.toggle('active', healthOnlyPositive);
@@ -220,7 +228,7 @@
       els.heightSliderFill.style.left = `${heightMinPercent}%`;
       els.heightSliderFill.style.width = `${heightMaxPercent - heightMinPercent}%`;
     }
-    els.statusChip.textContent = energyMode ? 'energy layer' : healthMode ? 'health layer' : 'earth-core layered app';
+    els.statusChip.textContent = '';
     setMapHealthVisibility();
   }
 
@@ -921,7 +929,9 @@
       lng: Number(p.lng),
       pop: Number(p.pop) || 0,
       greenShare: Number(p.greenShare) || 0,
-      redShare: 1 - (Number(p.greenShare) || 0)
+      redShare: 1 - (Number(p.greenShare) || 0),
+      isCluster: p.isCluster === true || p.isCluster === 'true' || p.isCluster === 1 || p.isCluster === '1' || Number(p.clusterCount) > 1,
+      clusterCount: Number(p.clusterCount) || 1
     };
   }
 
@@ -1194,6 +1204,8 @@
         pop: d.pop,
         isCluster: !!d.isCluster,
         clusterCount: d.clusterCount || 1,
+        centroidLat: d.centroidLat ?? null,
+        centroidLng: d.centroidLng ?? null,
         height: 0.01 + populationNorm(d.pop) * 0.24
       }))
     };

@@ -1031,7 +1031,7 @@
   const targetBtn = document.getElementById('target-btn');
   const dropdownMenu = document.getElementById('dropdown-menu');
   const dropdownItems = document.querySelectorAll('.dropdown-item');
-  const bodyIcons = { earth: '🌍', moon: '<span class="gray-moon">🌕</span>', mars: '🔴', sun: '☀️' };
+  const bodyIcons = { earth: '🌍', moon: '<span class="gray-moon">🌕</span>', mars: '<span class="mars-disc" aria-hidden="true"></span>', sun: '☀️' };
   const bodyNames = { earth: 'Earth', moon: 'Moon', mars: 'Mars', sun: 'Sun' };
 
   function syncTargetDropdownActive(targetName) {

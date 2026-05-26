@@ -25,6 +25,7 @@ body.micro-view #ui-container{opacity:0;pointer-events:none}
 .dropdown-item:hover{background:rgba(255,255,255,.1)}
 .dropdown-item.active{color:#ffd700;background:rgba(255,215,0,.15)}
 .gray-moon{filter:grayscale(100%) brightness(1.2);display:inline-block}
+.mars-disc{width:14px;height:14px;border-radius:50%;display:inline-block;vertical-align:-2px;background:radial-gradient(circle at 34% 30%, #f5b37f 0 18%, #c8653f 42%, #8f3e2f 74%, #5e261f 100%);box-shadow:inset -3px -2px 4px rgba(55,18,12,.42), inset 2px 1px 3px rgba(255,210,160,.35)}
 </style>
 </head>
 <body>
@@ -37,7 +38,7 @@ body.micro-view #ui-container{opacity:0;pointer-events:none}
     <div id="dropdown-menu" class="dropdown-content">
       <div class="dropdown-item active" data-target="earth">🌍 Earth</div>
       <div class="dropdown-item" data-target="moon"><span class="gray-moon">🌕</span> Moon</div>
-      <div class="dropdown-item" data-target="mars">🔴 Mars</div>
+      <div class="dropdown-item" data-target="mars"><span class="mars-disc" aria-hidden="true"></span> Mars</div>
       <div class="dropdown-item" data-target="sun">☀️ Sun</div>
     </div>
   </div>
@@ -45,6 +46,6 @@ body.micro-view #ui-container{opacity:0;pointer-events:none}
 
 <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
 <script src="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.js"></script>
-<script src="./earth-core.js"></script>
+<script src="./earth-core.js?v=mars-disc-1"></script>
 </body>
 </html>

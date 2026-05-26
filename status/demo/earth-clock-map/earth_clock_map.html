@@ -47,6 +47,7 @@ body.micro-view .map-coordinate-chip{opacity:1}
 body.micro-view #ui-container{opacity:0;pointer-events:none}
 #target-btn{min-width:112px;height:38px;border-radius:999px;border:1px solid rgba(255,255,255,.16);background:rgba(5,12,20,.78);color:var(--ink);box-shadow:0 16px 42px rgba(0,0,0,.36);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);font:850 12px/1 Inter,system-ui,sans-serif;cursor:pointer;padding:0 14px}
 #target-btn:hover{background:rgba(255,255,255,.11)}
+.mars-disc{width:14px;height:14px;border-radius:50%;display:inline-block;vertical-align:-2px;background:radial-gradient(circle at 34% 30%, #f5b37f 0 18%, #c8653f 42%, #8f3e2f 74%, #5e261f 100%);box-shadow:inset -3px -2px 4px rgba(55,18,12,.42), inset 2px 1px 3px rgba(255,210,160,.35)}
 .dropdown-content{display:none;position:absolute;left:0;bottom:calc(100% + 8px);min-width:136px;overflow:hidden;border:1px solid rgba(255,255,255,.13);border-radius:12px;background:rgba(5,12,20,.92);box-shadow:0 18px 48px rgba(0,0,0,.45);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
 .dropdown-content.show{display:block}
 .dropdown-item{padding:10px 13px;color:#eef4ff;font-size:12px;font-weight:750;cursor:pointer}
@@ -123,7 +124,7 @@ body.micro-view #ui-container{opacity:0;pointer-events:none}
   <div id="dropdown-menu" class="dropdown-content">
     <div class="dropdown-item active" data-target="earth">Earth</div>
     <div class="dropdown-item" data-target="moon">Moon</div>
-    <div class="dropdown-item" data-target="mars">Mars</div>
+    <div class="dropdown-item" data-target="mars"><span class="mars-disc" aria-hidden="true"></span> Mars</div>
     <div class="dropdown-item" data-target="sun">Sun</div>
   </div>
 </div>
@@ -192,7 +193,7 @@ body.micro-view #ui-container{opacity:0;pointer-events:none}
 <script>
 window.EARTH_CORE_ASSET_BASE = '../earth-core/assets/';
 </script>
-<script src="../earth-core/earth-core.js?v=mars-texture-1"></script>
+<script src="../earth-core/earth-core.js?v=mars-disc-1"></script>
 <script src="../shared/geonames.js?v=1"></script>
 <script src="./world-space-time-coordinates.js?v=36"></script>
 <script src="./earth-space-time-coordinates.js?v=1"></script>

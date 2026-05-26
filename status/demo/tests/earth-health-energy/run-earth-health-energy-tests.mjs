@@ -130,6 +130,19 @@ function test(name, fn) {
   tests.push({ name, fn });
 }
 
+const forbiddenCountryNames = [
+  'India',
+  'United States',
+  'Canada',
+  'Australia',
+  'France',
+  'Germany',
+  'China',
+  'Mexico',
+  'Brazil',
+  'United Kingdom',
+];
+
 async function appState(page) {
   return page.evaluate(() => window.EarthHealthEnergyApp.getState());
 }
@@ -207,8 +220,10 @@ test('boots on earth-core and loads the full city dataset', async ({ page }) => 
   assert.ok(state.fullPopulationMaxPop > 20000000);
   assert.equal(await page.evaluate(() => typeof window.GeoNames.loadPlaces), 'function');
   assert.equal(await page.locator('.dropdown-item[data-target="mars"]').count(), 1);
+  assert.equal(await page.locator('.dropdown-item[data-target="mars"] .mars-disc').count(), 1);
   assert.match(await page.evaluate(() => Array.from(document.scripts).map(script => script.src).join('\n')), /\/shared\/geonames\.js\?v=1/);
-  assert.equal(await page.locator('#status-chip').innerText(), 'earth-core layered app');
+  assert.equal(await page.locator('#status-chip').evaluate(el => getComputedStyle(el).display), 'none');
+  assert.equal(await page.locator('#status-chip').innerText(), '');
 });
 
 test('Energy mode toggles panel state and remains mutually exclusive with Health', async ({ page }) => {
@@ -374,8 +389,8 @@ test('Health mode shows filters, hides Energy, and restores from hamburger', asy
   assert.equal(state.healthMode, true);
   assert.equal(state.energyMode, false);
   assert.equal(await page.locator('#showEnergyBtn').isVisible(), false);
-  assert.equal(await page.locator('#showHealthBtn').innerText(), 'Hide Health');
-  assert.equal(await page.locator('#inspectTitle').innerText(), 'Health Filters');
+  assert.equal(await page.locator('#showHealthBtn').innerText(), 'Hide Manifest');
+  assert.equal(await page.locator('#inspectTitle').innerText(), 'Manifest Filters');
   assert.equal(await page.locator('#healthClusterBtn').isVisible(), true);
   assert.equal(await page.locator('#heightRangeMin').isVisible(), true);
   assert.equal(await page.locator('#heightRangeMax').isVisible(), true);
@@ -394,9 +409,9 @@ test('Health toggles off cleanly and restores neutral app chrome', async ({ page
   const state = await appState(page);
   assert.equal(state.healthMode, false);
   assert.equal(state.healthLayerVisible, false);
-  assert.equal(await page.locator('#showHealthBtn').innerText(), 'Show Health');
+  assert.equal(await page.locator('#showHealthBtn').innerText(), 'Show Manifest');
   assert.equal(await page.locator('#showEnergyBtn').isVisible(), true);
-  assert.equal(await page.locator('#status-chip').innerText(), 'earth-core layered app');
+  assert.equal(await page.locator('#status-chip').innerText(), '');
   assert.equal(await page.locator('#pillarTooltip').evaluate(el => getComputedStyle(el).display), 'none');
 });
 
@@ -431,6 +446,65 @@ test('Cluster mode uses named region labels and can return to raw cities', async
   await page.waitForFunction(() => !window.EarthHealthEnergyApp.getState().healthClusterMode);
   state = await appState(page);
   assert.equal(state.displayedHealthCityCount, state.healthCityCount);
+});
+
+test('Cluster mode anchors Portland region at Portland, not the grid centroid near Vancouver', async ({ page }) => {
+  await showHealth(page);
+  await page.click('#healthClusterBtn');
+  await page.waitForFunction(() => window.EarthHealthEnergyApp.getState().healthClusterMode);
+
+  await page.evaluate(() => window.EarthSystem.switchToMicro(45.5234, -122.6762, { zoom: 9 }));
+  await page.waitForFunction(() => {
+    const map = window.EarthSystem.map();
+    return map && map.getLayer('health2d-green-inner') &&
+      map.getLayoutProperty('health2d-green-inner', 'visibility') === 'visible';
+  }, null, { timeout: 20000 });
+  await page.waitForTimeout(1000);
+  const sourceFeature = await page.evaluate(() => {
+    const data = window.EarthSystem.map().getSource('health2d')._data;
+    const match = data.features.find(feature =>
+      Math.abs(Number(feature.properties?.lat) - 45.5234) < 0.05 &&
+      Math.abs(Number(feature.properties?.lng) - -122.6762) < 0.05 &&
+      /Portland/i.test(String(feature.properties?.name || '')));
+    if (!match) return null;
+    return {
+      name: match.properties.name,
+      lat: Number(match.properties.lat),
+      lng: Number(match.properties.lng),
+      isCluster: match.properties.isCluster === true || match.properties.isCluster === 'true' || match.properties.isCluster === 1 || match.properties.isCluster === '1' || Number(match.properties.clusterCount) > 1,
+      clusterCount: Number(match.properties.clusterCount) || 1,
+      coordinates: match.geometry.coordinates
+    };
+  });
+  assert.ok(sourceFeature, 'health2d source should include a Portland cluster feature');
+  assert.ok(Math.abs(sourceFeature.lat - 45.5234) < 0.05, `Portland cluster latitude should stay near Portland, got ${sourceFeature.lat}`);
+  assert.ok(Math.abs(sourceFeature.lng - -122.6762) < 0.05, `Portland cluster longitude should stay near Portland, got ${sourceFeature.lng}`);
+  assert.ok(Math.abs(sourceFeature.coordinates[1] - 45.5234) < 0.05);
+  assert.ok(Math.abs(sourceFeature.coordinates[0] - -122.6762) < 0.05);
+
+  const mapFeature = await page.evaluate(() => {
+    const map = window.EarthSystem.map();
+    const pt = map.project([-122.6762, 45.5234]);
+    const features = map.queryRenderedFeatures(
+      [[pt.x - 140, pt.y - 140], [pt.x + 140, pt.y + 140]],
+      { layers: ['health2d-green-inner', 'health2d-red-base'] }
+    );
+    const match = features.find(feature =>
+      Math.abs(Number(feature.properties?.lat) - 45.5234) < 0.05 &&
+      Math.abs(Number(feature.properties?.lng) - -122.6762) < 0.05 &&
+      /Portland/i.test(String(feature.properties?.name || '')));
+    if (!match) return null;
+    return {
+      name: match.properties.name,
+      lat: Number(match.properties.lat),
+      lng: Number(match.properties.lng),
+      isCluster: match.properties.isCluster === true || match.properties.isCluster === 'true' || match.properties.isCluster === 1 || match.properties.isCluster === '1' || Number(match.properties.clusterCount) > 1,
+      clusterCount: Number(match.properties.clusterCount) || 1
+    };
+  });
+  assert.ok(mapFeature, '2D map should render a Portland cluster feature near Portland');
+  assert.ok(Math.abs(mapFeature.lat - 45.5234) < 0.05);
+  assert.ok(Math.abs(mapFeature.lng - -122.6762) < 0.05);
 });
 
 test('Percentile range filters without rescaling remaining column heights', async ({ page }) => {
@@ -505,6 +579,21 @@ test('City search uses shared GeoNames labels for smaller regional places', asyn
   await page.waitForFunction(() => getComputedStyle(document.querySelector('#flySuggestions')).display === 'block');
   const suggestions = await page.locator('#flySuggestions > div').allInnerTexts();
   assert.equal(suggestions.some(text => /Panjim/i.test(text) && /Goa/i.test(text)), true);
+});
+
+test('Visible Manifest labels and city suggestions do not mention countries', async ({ page }) => {
+  await showHealth(page);
+  await page.fill('#flyInput', 'Panjim');
+  await page.waitForFunction(() => getComputedStyle(document.querySelector('#flySuggestions')).display === 'block');
+  const visibleText = await page.evaluate(() => document.body.innerText);
+  for (const country of forbiddenCountryNames) {
+    assert.equal(visibleText.includes(country), false, `visible app text should not mention country name ${country}`);
+  }
+
+  const suggestionText = (await page.locator('#flySuggestions').innerText()).trim();
+  assert.match(suggestionText, /Panjim/i);
+  assert.match(suggestionText, /Goa/i);
+  assert.equal(/India|United States|Canada|Australia|France|Germany|China|Mexico|Brazil|United Kingdom/.test(suggestionText), false);
 });
 
 test('City search clear button and outside click dismiss suggestions', async ({ page }) => {
