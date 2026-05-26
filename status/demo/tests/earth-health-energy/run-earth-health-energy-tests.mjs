@@ -35,7 +35,8 @@ const MIME_TYPES = new Map([
   ['.css', 'text/css; charset=utf-8'],
   ['.jpg', 'image/jpeg'],
   ['.png', 'image/png'],
-  ['.csv', 'text/csv; charset=utf-8']
+  ['.csv', 'text/csv; charset=utf-8'],
+  ['.tsv', 'text/tab-separated-values; charset=utf-8']
 ]);
 
 const transparentPng = Buffer.from(
@@ -112,7 +113,7 @@ async function withAppPage(testBody) {
     await page.waitForFunction(() =>
       window.EarthSystem &&
       window.EarthHealthEnergyApp &&
-      window.EarthHealthEnergyApp.getState().healthCityCount > 40000,
+      window.EarthHealthEnergyApp.getState().healthCityCount > 200000,
     null, { timeout: 45000 });
     await page.waitForTimeout(250);
     await testBody({ page, baseUrl: server.baseUrl, pageErrors, failedRequests });
@@ -199,11 +200,11 @@ test('boots on earth-core and loads the full city dataset', async ({ page }) => 
   assert.equal(windowIsObject(await page.evaluate(() => window.EarthSystem)), true);
   assert.equal(state.healthMode, false);
   assert.equal(state.energyMode, false);
-  assert.equal(state.healthCityCount, 47805);
-  assert.equal(state.displayedHealthCityCount, 47805);
-  assert.equal(state.healthGeoJSONFeatureCount, 47805);
+  assert.equal(state.healthCityCount, 202466);
+  assert.equal(state.displayedHealthCityCount, 202466);
+  assert.equal(state.healthGeoJSONFeatureCount, 202466);
   assert.equal(state.energySystemCount, 17);
-  assert.ok(state.fullPopulationMaxPop > 30000000);
+  assert.ok(state.fullPopulationMaxPop > 20000000);
   assert.equal(await page.locator('#status-chip').innerText(), 'earth-core layered app');
 });
 
@@ -259,6 +260,14 @@ test('Energy controls toggle ascend state with oracle timing and stay active dur
   await page.click('#target-btn');
   await page.click('.dropdown-item[data-target="moon"]');
   await page.waitForFunction(() => window.EarthSystem.getState().target === 'moon', null, { timeout: 5000 });
+  await page.waitForTimeout(300);
+  state = await appState(page);
+  assert.equal(state.energyMode, true);
+  assert.equal(state.energyLayerVisible, true);
+
+  await page.click('#target-btn');
+  await page.click('.dropdown-item[data-target="mars"]');
+  await page.waitForFunction(() => window.EarthSystem.getState().target === 'mars', null, { timeout: 5000 });
   await page.waitForTimeout(300);
   state = await appState(page);
   assert.equal(state.energyMode, true);
@@ -412,7 +421,7 @@ test('Cluster mode uses named region labels and can return to raw cities', async
   assert.equal(await page.locator('#healthClusterBtn').innerText(), 'Show Raw Cities');
   assert.ok(state.displayedHealthCityCount < state.healthCityCount);
   const names = state.displayedSample.map(item => item.city);
-  assert.equal(names.some(name => /Delhi region|Mumbai region/.test(name)), true);
+  assert.equal(names.some(name => /\bregion$/.test(name)), true);
   assert.equal(names.some(name => /^\d+ cities/.test(name)), false);
 
   await page.click('#healthClusterBtn');

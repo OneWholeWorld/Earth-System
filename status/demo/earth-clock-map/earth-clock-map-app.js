@@ -1,5 +1,5 @@
 (() => {
-  const DATA_URL = './assets/data/geonames-cities500.tsv';
+  const DATA_URL = '../shared/assets/data/geonames-cities500.tsv';
   const DEFAULT_CITY = 'Panjim';
   const DEFAULT_ZERO_EPOCH_UTC = '1974-03-13T04:40:00Z';
   const ZERO_EPOCH_STORAGE_KEY = 'earth-clock-map.zeroEpochUTC';
