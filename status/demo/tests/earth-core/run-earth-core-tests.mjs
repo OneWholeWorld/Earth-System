@@ -199,7 +199,7 @@ test('renders the 3D scene', async ({ page }) => {
   assert.equal(renderState.cameraFinite, true);
 });
 
-test('target dropdown opens, selects Moon and Sun, and emits targetchange', async ({ page }) => {
+test('target dropdown opens, selects Moon, Mars, and Sun, and emits targetchange', async ({ page }) => {
   await page.evaluate(() => {
     window.__targetChanges = [];
     window.EarthSystem.on('targetchange', event => window.__targetChanges.push(event.detail.targetName));
@@ -222,6 +222,18 @@ test('target dropdown opens, selects Moon and Sun, and emits targetchange', asyn
   assert.deepEqual(ui.changes, ['moon']);
 
   await page.click('#target-btn');
+  await page.click('.dropdown-item[data-target="mars"]');
+  await page.waitForFunction(() => window.EarthSystem.getState().target === 'mars', null, { timeout: 4000 });
+  ui = await page.evaluate(() => ({
+    active: document.querySelector('.dropdown-item.active')?.dataset.target,
+    buttonText: document.querySelector('#target-btn').textContent.trim(),
+    changes: window.__targetChanges
+  }));
+  assert.equal(ui.active, 'mars');
+  assert.match(ui.buttonText, /Mars/);
+  assert.deepEqual(ui.changes, ['moon', 'mars']);
+
+  await page.click('#target-btn');
   await page.click('.dropdown-item[data-target="sun"]');
   await page.waitForFunction(() => window.EarthSystem.getState().target === 'sun', null, { timeout: 4000 });
   ui = await page.evaluate(() => ({
@@ -231,7 +243,7 @@ test('target dropdown opens, selects Moon and Sun, and emits targetchange', asyn
   }));
   assert.equal(ui.active, 'sun');
   assert.match(ui.buttonText, /Sun/);
-  assert.deepEqual(ui.changes, ['moon', 'sun']);
+  assert.deepEqual(ui.changes, ['moon', 'mars', 'sun']);
 });
 
 test('target dropdown closes on outside click and keeps a single active target', async ({ page }) => {
@@ -476,6 +488,40 @@ test('flyToLocation emits, can stay in globe mode, and can enter map mode', asyn
   assert.ok(Math.abs(mapState.lat - 19.0760) < 0.01);
   assert.ok(Math.abs(mapState.lng - 72.8777) < 0.01);
   assert.ok(Math.abs(mapState.zoom - 8) < 0.01);
+});
+
+test('flyToLocation from 2D map mode returns to Earth and lands at the destination map', async ({ page }) => {
+  await page.evaluate(() => window.EarthSystem.switchToMicro(18.5204, 73.8567, { zoom: 8 }));
+  await page.waitForFunction(() => window.EarthSystem.map() && window.EarthSystem.getState().mode === 'map', null, { timeout: 10000 });
+  await page.evaluate(() => window.EarthSystem.flyToLocation({
+    lat: 19.4326,
+    lng: -99.1332,
+    duration: 120,
+    enterMap: true,
+    mapZoom: 9
+  }));
+  await page.waitForFunction(() => {
+    const map = window.EarthSystem.map();
+    if (!map || window.EarthSystem.getState().mode !== 'map') return false;
+    const center = map.getCenter();
+    return Math.abs(center.lat - 19.4326) < 0.02 && Math.abs(center.lng - -99.1332) < 0.02;
+  }, null, { timeout: 10000 });
+  const state = await page.evaluate(() => {
+    const map = window.EarthSystem.map();
+    const center = map.getCenter();
+    return {
+      target: window.EarthSystem.getState().target,
+      mode: window.EarthSystem.getState().mode,
+      lat: center.lat,
+      lng: center.lng,
+      zoom: map.getZoom()
+    };
+  });
+  assert.equal(state.target, 'earth');
+  assert.equal(state.mode, 'map');
+  assert.ok(Math.abs(state.lat - 19.4326) < 0.02);
+  assert.ok(Math.abs(state.lng - -99.1332) < 0.02);
+  assert.ok(Math.abs(state.zoom - 9) < 0.05);
 });
 
 test('flyToTarget settles on Earth, Moon, Mars, and Sun with finite camera state', async ({ page }) => {
@@ -941,6 +987,7 @@ test('EARTH_CORE_ASSET_BASE redirects configured asset URLs', async ({ page, bas
   assert.equal(assets.earthDay, `${baseUrl}/earth-core/assets/textures/earth-blue-marble.jpg`);
   assert.equal(assets.earthNight, `${baseUrl}/earth-core/assets/textures/earth-night.jpg`);
   assert.equal(assets.moon, `${baseUrl}/earth-core/assets/textures/moon-8k.jpg`);
+  assert.equal(assets.mars, `${baseUrl}/earth-core/assets/textures/mars-viking-mdim21-1km.jpg`);
   assert.equal(assets.sun, `${baseUrl}/earth-core/assets/textures/sun_disk.jpg`);
 }, {
   init: async (page, baseUrl) => {

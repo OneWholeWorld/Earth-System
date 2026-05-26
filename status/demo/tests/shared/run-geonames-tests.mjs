@@ -27,6 +27,16 @@ const populatedPlaces = GeoNames.normalizeRows(sampleRows.map(row => row.slice()
 assert.equal(populatedPlaces.length, 1);
 assert.equal(populatedPlaces[0].cityAscii, 'Pune');
 
+const unsortedPlaces = GeoNames.normalizeRows(sampleRows.map(row => row.slice()), { sortByPopulation: false });
+assert.equal(unsortedPlaces[0].cityAscii, 'Pune');
+assert.equal(GeoNames.labelForPlace({ city: 'Victoria', adminName: 'British Columbia', country: 'Canada' }), 'Victoria, British Columbia, Canada');
+
+const csvRows = GeoNames.parseCSV('city,city_ascii,lat,lng,country,iso2,admin_name,population\n"Quote, City",Quote City,1,2,Testland,TL,Region,500');
+const csvPlaces = GeoNames.normalizeRows(csvRows);
+assert.equal(csvPlaces.length, 1);
+assert.equal(csvPlaces[0].city, 'Quote, City');
+assert.equal(csvPlaces[0].iso2, 'TL');
+
 const datasetText = await readFile('shared/assets/data/geonames-cities500.tsv', 'utf8');
 const datasetRows = GeoNames.parseTSV(datasetText);
 const datasetPlaces = GeoNames.normalizeRows(datasetRows.map(row => row.slice()), { includeSearchText: false });

@@ -205,6 +205,9 @@ test('boots on earth-core and loads the full city dataset', async ({ page }) => 
   assert.equal(state.healthGeoJSONFeatureCount, 202466);
   assert.equal(state.energySystemCount, 17);
   assert.ok(state.fullPopulationMaxPop > 20000000);
+  assert.equal(await page.evaluate(() => typeof window.GeoNames.loadPlaces), 'function');
+  assert.equal(await page.locator('.dropdown-item[data-target="mars"]').count(), 1);
+  assert.match(await page.evaluate(() => Array.from(document.scripts).map(script => script.src).join('\n')), /\/shared\/geonames\.js\?v=1/);
   assert.equal(await page.locator('#status-chip').innerText(), 'earth-core layered app');
 });
 
@@ -497,6 +500,13 @@ test('City search suggestions appear and selecting one starts Health map workflo
   assert.match(await page.locator('#flyInput').inputValue(), /Delhi/i);
 });
 
+test('City search uses shared GeoNames labels for smaller regional places', async ({ page }) => {
+  await page.fill('#flyInput', 'Panjim');
+  await page.waitForFunction(() => getComputedStyle(document.querySelector('#flySuggestions')).display === 'block');
+  const suggestions = await page.locator('#flySuggestions > div').allInnerTexts();
+  assert.equal(suggestions.some(text => /Panjim/i.test(text) && /Goa/i.test(text)), true);
+});
+
 test('City search clear button and outside click dismiss suggestions', async ({ page }) => {
   await page.fill('#flyInput', 'Mumbai');
   await page.waitForFunction(() => getComputedStyle(document.querySelector('#flySuggestions')).display === 'block');
@@ -618,12 +628,14 @@ test('Health 3D layer hides away from Earth target and returns on Earth', async 
   await page.waitForTimeout(250);
   let state = await appState(page);
   assert.equal(state.healthLayerVisible, true);
-  await page.evaluate(() => window.EarthSystem.flyToTarget('sun'));
-  await page.waitForFunction(() => window.EarthSystem.getState().target === 'sun', null, { timeout: 5000 });
-  await page.waitForTimeout(300);
-  state = await appState(page);
-  assert.equal(state.healthMode, true);
-  assert.equal(state.healthLayerVisible, false);
+  for (const target of ['mars', 'sun']) {
+    await page.evaluate(name => window.EarthSystem.flyToTarget(name), target);
+    await page.waitForFunction(name => window.EarthSystem.getState().target === name, target, { timeout: 5000 });
+    await page.waitForTimeout(300);
+    state = await appState(page);
+    assert.equal(state.healthMode, true);
+    assert.equal(state.healthLayerVisible, false);
+  }
 
   await page.evaluate(() => window.EarthSystem.flyToTarget('earth'));
   await page.waitForFunction(() => window.EarthSystem.getState().target === 'earth', null, { timeout: 5000 });

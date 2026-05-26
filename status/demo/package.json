@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "test:earth-core": "node tests/earth-core/run-earth-core-tests.mjs",
+    "test:earth-clock-map": "node tests/earth-clock-map/run-earth-clock-map-tests.mjs",
     "test:earth-health-energy": "node tests/earth-health-energy/run-earth-health-energy-tests.mjs",
     "test:geonames": "node tests/shared/run-geonames-tests.mjs",
     "test:wstc": "node tests/earth-clock-map/run-wstc-api-tests.mjs"

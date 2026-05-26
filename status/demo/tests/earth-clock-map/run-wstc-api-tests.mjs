@@ -176,6 +176,22 @@ test('WSTC supports custom epochs without Earth assumptions', () => {
   assert.equal(nextDay.completed.planetDays, 1);
 });
 
+test('WSTC handles negative elapsed time by wrapping coordinates and counting completed cycles', () => {
+  const before = wstc.getWorldSpaceTimeCoordinates({
+    elapsedMillisecondsSinceEpoch: -daySeconds * 250,
+    machinePrecision: 12,
+  });
+  closeTo(before.wstc.P, 270);
+  assert.equal(before.completed.planetDays, -1);
+
+  const beforeYear = wstc.getWorldSpaceTimeCoordinates({
+    elapsedMillisecondsSinceEpoch: -yearSeconds * 500,
+    machinePrecision: 12,
+  });
+  closeTo(beforeYear.wstc.S, 180);
+  assert.equal(beforeYear.completed.starYears, -1);
+});
+
 test('ESTC exports Earth application helpers', () => {
   for (const name of [
     'CONFIG',
@@ -226,6 +242,21 @@ test('ESTC Earth surface under P0 is an orientation overlay, not WSTC core', () 
   closeTo(surface.longitude, 20.985647495461, 1e-9);
   closeTo(surface.earthOrientationPhase, 0.985647495461, 1e-9);
   assert.match(surface.note, /ESTC orientation overlay/);
+});
+
+test('ESTC P0 surface overlay moves east while stable P remains on the coordinate circle', () => {
+  const afterTenAtomicDays = timeAfter(daySeconds * 10).toISOString();
+  const clock = estc.getEarthSpaceTimeCoordinates({
+    time: afterTenAtomicDays,
+    epochUTC: epoch,
+    latitude: africaZero.latitude,
+    longitude: africaZero.longitude,
+    altitudeMeters: 0,
+  });
+  const surface = estc.getEarthSurfaceUnderPZero({ time: afterTenAtomicDays, epochUTC: epoch });
+  closeTo(clock.wstc.P, 0);
+  closeTo(estc.getPZeroMeridian(clock), 20);
+  assert.ok(surface.longitude > 29 && surface.longitude < 30, 'Earth orientation overlay should be east of Africa zero after ten atomic days');
 });
 
 test('ESTC E and M helpers match the documented GPS conversion', () => {
@@ -301,6 +332,19 @@ test('MSTC composes WSTC motion with Moon E/M/V and lunar P cycle', () => {
   closeTo(place.wstc.M, -12.5);
   closeTo(place.wstc.V, 1200);
   assert.match(place.strings.mstc, /^Y0, O0, P0/);
+});
+
+test('MSTC and MaSTC keep body-specific P cycles separate from WSTC planet-day P', () => {
+  const oneEarthDay = new Date(new Date(epoch).getTime() + daySeconds * 1000).toISOString();
+  const moonClock = mstc.getMoonSpaceTimeCoordinates({ time: oneEarthDay, epochUTC: epoch });
+  const marsClock = mastc.getMarsSpaceTimeCoordinates({ time: oneEarthDay, epochUTC: epoch });
+  const worldClock = wstc.getWorldSpaceTimeCoordinates({ time: oneEarthDay, epochUTC: epoch });
+
+  closeTo(worldClock.wstc.P, 0);
+  assert.notEqual(moonClock.wstc.P, worldClock.wstc.P);
+  assert.notEqual(marsClock.wstc.P, worldClock.wstc.P);
+  assert.ok(moonClock.wstc.P > 0 && moonClock.wstc.P < 360);
+  assert.ok(marsClock.wstc.P > 0 && marsClock.wstc.P < 360);
 });
 
 test('MaSTC composes WSTC motion with Mars E/M/V and Mars S/P cycles', () => {

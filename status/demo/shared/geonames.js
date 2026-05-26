@@ -73,7 +73,7 @@
     const asciiIdx = idx('ascii') >= 0 ? idx('ascii') : idx('city_ascii');
     const adminIdx = idx('adminname') >= 0 ? idx('adminname') : idx('admin_name');
     const countryIdx = idx('countryname') >= 0 ? idx('countryname') : idx('country');
-    const isoIdx = idx('country') >= 0 ? idx('country') : idx('iso2');
+    const isoIdx = idx('iso2') >= 0 ? idx('iso2') : idx('country');
     const latIdx = idx('lat');
     const lngIdx = idx('lng');
     const popIdx = idx('population');
