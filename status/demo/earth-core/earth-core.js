@@ -7,6 +7,7 @@
     earthNormal: assetUrl('textures/earth_normal_2048.jpg'),
     earthSpecular: assetUrl('textures/earth_specular_2048.jpg'),
     moon: assetUrl('textures/moon-8k.jpg'),
+    mars: assetUrl('textures/mars-viking-mdim21-1km.jpg'),
     sun: assetUrl('textures/sun_disk.jpg')
   };
 
@@ -34,10 +35,14 @@
   const ORBIT_ZOOM_SPEED = 0.0015;
   const SUN_BASE_SCALE = 1.0;
   const SUN_CINEMATIC_SCALE = 18.0;
+  const MAPLIBRE_VERSION = '4.1.2';
+  const MAPLIBRE_JS_URL = options.mapLibreJsUrl || `https://unpkg.com/maplibre-gl@${MAPLIBRE_VERSION}/dist/maplibre-gl.js`;
+  const MAPLIBRE_CSS_URL = options.mapLibreCssUrl || `https://unpkg.com/maplibre-gl@${MAPLIBRE_VERSION}/dist/maplibre-gl.css`;
 
   const TARGET_CONFIGS = {
     earth: { minRadius: MACRO_MIN_RADIUS, maxRadius: 20.0, defaultRadius: 3.1, discStart: 1.42, earthScale: 1.0 },
     moon:  { minRadius: 0.08, maxRadius: 20.0, defaultRadius: 0.35, discStart: 0.12, earthScale: 0.25 },
+    mars:  { minRadius: 0.10, maxRadius: 24.0, defaultRadius: 0.48, discStart: 0.16, earthScale: 0.22 },
     sun:   { minRadius: 0.15, maxRadius: 35.0, defaultRadius: 10.5, discStart: 0.3, earthScale: 0.24 }
   };
 
@@ -65,6 +70,8 @@
   let currentConfig = TARGET_CONFIGS.earth;
   let isMicroView = false;
   let streetMap = null;
+  let mapLibreLoadPromise = null;
+  let pendingMapRequest = null;
   let t = 0;
   let sunFocusBlend = 0.0;
   let mobilePinching = false;
@@ -328,6 +335,21 @@
   );
   moonOrbitGroup.add(moon);
 
+  const marsOrbitGroup = new THREE.Group();
+  scene.add(marsOrbitGroup);
+  const marsDistance = 3.25;
+  const mars = new THREE.Mesh(
+    new THREE.SphereGeometry(0.096, 64, 64),
+    new THREE.MeshPhongMaterial({
+      map: loader.load(ASSETS.mars),
+      color: 0xffffff,
+      emissive: 0x120502,
+      shininess: 3,
+      specular: 0x1d0f09,
+    })
+  );
+  marsOrbitGroup.add(mars);
+
   function degToRad(deg) {
     return deg * Math.PI / 180;
   }
@@ -357,6 +379,22 @@
     const orbitUp = new THREE.Vector3().crossVectors(sunDir, orbitRight).normalize();
     const inPlane = sunDir.clone().multiplyScalar(Math.cos(elongation)).add(orbitRight.clone().multiplyScalar(Math.sin(elongation)));
     return inPlane.multiplyScalar(Math.cos(latRad)).add(orbitUp.clone().multiplyScalar(Math.sin(latRad))).normalize().multiplyScalar(distance);
+  }
+
+  function getApproxMarsScenePosition(distance = marsDistance) {
+    const now = new Date();
+    const d = (now.getTime() - Date.UTC(2000, 0, 1, 12, 0, 0)) / 86400000;
+    const marsLongitude = normalizeDeg(355.433 + 0.52402075 * d);
+    const earthLongitude = normalizeDeg(100.464 + 0.98564736 * d);
+    const relativeLongitude = degToRad(normalizeDeg(marsLongitude - earthLongitude));
+    const sunDir = sun.position.clone().normalize();
+    const up = new THREE.Vector3(0, 1, 0);
+    let orbitRight = new THREE.Vector3().crossVectors(up, sunDir).normalize();
+    if (orbitRight.lengthSq() < 0.0001) orbitRight = new THREE.Vector3(1, 0, 0);
+    return sunDir.clone().multiplyScalar(Math.cos(relativeLongitude))
+      .add(orbitRight.multiplyScalar(Math.sin(relativeLongitude)))
+      .normalize()
+      .multiplyScalar(distance);
   }
 
   function orientMoonTowardEarth() {
@@ -455,6 +493,7 @@
     if (name === 'earth') return new THREE.Vector3(0, 0, 0);
     if (name === 'sun') return getSunCinematicAnchor();
     if (name === 'moon') return moon.position.clone();
+    if (name === 'mars') return mars.position.clone();
     return new THREE.Vector3(0, 0, 0);
   }
 
@@ -528,6 +567,7 @@
     if (targetName !== 'earth') obstacles.push({ name: 'earth', center: new THREE.Vector3(0, 0, 0), radius: 1.46 });
     if (targetName !== 'sun') obstacles.push({ name: 'sun', center: sunGroup.position.clone(), radius: Math.max(0.42, 0.115 * Math.max(sunGroup.scale.x, SUN_CINEMATIC_SCALE) + 0.42) });
     if (targetName !== 'moon') obstacles.push({ name: 'moon', center: moon.position.clone(), radius: 0.22 });
+    if (targetName !== 'mars') obstacles.push({ name: 'mars', center: mars.position.clone(), radius: 0.24 });
     return obstacles;
   }
 
@@ -562,6 +602,9 @@
     if (targetName === 'moon') {
       flight.endTheta = Math.atan2(targetPosition.x, targetPosition.z) + 0.4;
       flight.endPhi = 0.15;
+    } else if (targetName === 'mars') {
+      flight.endTheta = Math.atan2(targetPosition.x, targetPosition.z) + 0.32;
+      flight.endPhi = 0.12;
     } else if (targetName === 'sun') {
       flight.endTheta = 0.0;
       flight.endPhi = 0.05;
@@ -587,14 +630,66 @@
     emit('targetchange', { targetName });
   }
 
+  function ensureMapLibreCss() {
+    if (!MAPLIBRE_CSS_URL) return;
+    const existing = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
+      .some(link => link.href === MAPLIBRE_CSS_URL || link.href.includes('/maplibre-gl.css'));
+    if (existing) return;
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = MAPLIBRE_CSS_URL;
+    link.dataset.earthCoreDependency = 'maplibre-css';
+    document.head.appendChild(link);
+  }
+
+  function loadMapLibre() {
+    if (window.maplibregl) return Promise.resolve(window.maplibregl);
+    if (mapLibreLoadPromise) return mapLibreLoadPromise;
+    ensureMapLibreCss();
+    mapLibreLoadPromise = new Promise((resolve, reject) => {
+      const existingScript = Array.from(document.scripts)
+        .find(script => script.src === MAPLIBRE_JS_URL || script.src.includes('/maplibre-gl.js'));
+      const script = existingScript || document.createElement('script');
+      const finish = () => {
+        if (window.maplibregl) resolve(window.maplibregl);
+        else reject(new Error('MapLibre loaded without exposing window.maplibregl.'));
+      };
+      if (window.maplibregl) {
+        resolve(window.maplibregl);
+        return;
+      }
+      script.addEventListener('load', finish, { once: true });
+      script.addEventListener('error', () => reject(new Error(`Could not load MapLibre from ${MAPLIBRE_JS_URL}`)), { once: true });
+      if (!existingScript) {
+        script.src = MAPLIBRE_JS_URL;
+        script.async = true;
+        script.dataset.earthCoreDependency = 'maplibre-js';
+        document.head.appendChild(script);
+      }
+    }).catch(error => {
+      mapLibreLoadPromise = null;
+      console.warn(error.message || error);
+      return null;
+    });
+    return mapLibreLoadPromise;
+  }
+
   function initOrUpdateMap(lat, lng, zoom = MICRO_START_ZOOM) {
-    if (typeof maplibregl === 'undefined') {
-      console.warn('MapLibre is not loaded.');
+    if (!window.maplibregl) {
+      pendingMapRequest = { lat, lng, zoom };
+      loadMapLibre().then(library => {
+        if (!library || !pendingMapRequest) return;
+        const next = pendingMapRequest;
+        pendingMapRequest = null;
+        initOrUpdateMap(next.lat, next.lng, next.zoom);
+        if (isMicroView && streetMap) streetMap.resize();
+      });
       return null;
     }
 
+    pendingMapRequest = null;
     if (!streetMap) {
-      streetMap = new maplibregl.Map({
+      streetMap = new window.maplibregl.Map({
         container: mapContainer,
         style: {
           version: 8,
@@ -823,6 +918,15 @@
     };
   }
 
+  function setOrbit(nextOrbit = {}) {
+    if (Number.isFinite(nextOrbit.radius)) {
+      orbit.radius = Math.max(currentConfig.minRadius, Math.min(currentConfig.maxRadius, nextOrbit.radius));
+    }
+    if (Number.isFinite(nextOrbit.theta)) orbit.theta = nextOrbit.theta;
+    if (Number.isFinite(nextOrbit.phi)) orbit.phi = Math.max(-1.25, Math.min(1.25, nextOrbit.phi));
+    updateCamera();
+  }
+
   function mobileTouchDistance(touches) {
     if (!touches || touches.length < 2) return 0;
     const dx = touches[0].clientX - touches[1].clientX;
@@ -927,8 +1031,8 @@
   const targetBtn = document.getElementById('target-btn');
   const dropdownMenu = document.getElementById('dropdown-menu');
   const dropdownItems = document.querySelectorAll('.dropdown-item');
-  const bodyIcons = { earth: '🌍', moon: '<span class="gray-moon">🌕</span>', sun: '☀️' };
-  const bodyNames = { earth: 'Earth', moon: 'Moon', sun: 'Sun' };
+  const bodyIcons = { earth: '🌍', moon: '<span class="gray-moon">🌕</span>', mars: '🔴', sun: '☀️' };
+  const bodyNames = { earth: 'Earth', moon: 'Moon', mars: 'Mars', sun: 'Sun' };
 
   function syncTargetDropdownActive(targetName) {
     targetBtn.innerHTML = `${bodyIcons[targetName]} ${bodyNames[targetName]} ▾`;
@@ -1005,6 +1109,8 @@
     moon.scale.setScalar(1);
     orientMoonTowardEarth();
 
+    mars.position.copy(getApproxMarsScenePosition(marsDistance));
+
     emit('beforeRender', { time: performance.now(), delta: 0 });
 
     threeLayers.forEach(layer => {
@@ -1026,11 +1132,13 @@
     earthGroup,
     earth,
     moon,
+    mars,
     sun,
     sunGroup,
     map: () => streetMap,
     config: { targets: TARGET_CONFIGS, assets: ASSETS },
     getState,
+    setOrbit,
     on,
     flyToTarget,
     flyToLocation,

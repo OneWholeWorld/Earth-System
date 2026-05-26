@@ -150,9 +150,9 @@ test('boots and exposes the public EarthSystem contract', async ({ page }) => {
     const methods = [
       'getState', 'on', 'flyToTarget', 'flyToLocation', 'switchToMicro', 'switchToMacro',
       'latLngToVec', 'addThreeLayer', 'removeThreeLayer', 'addMapLayer', 'removeMapLayer',
-      'registerLayer', 'unregisterLayer', 'map'
+      'registerLayer', 'unregisterLayer', 'setOrbit', 'map'
     ];
-    const objects = ['scene', 'camera', 'renderer', 'earthGroup', 'earth', 'moon', 'sun', 'sunGroup'];
+    const objects = ['scene', 'camera', 'renderer', 'earthGroup', 'earth', 'moon', 'mars', 'sun', 'sunGroup'];
     return {
       version: api.version,
       methods: Object.fromEntries(methods.map(name => [name, typeof api[name]])),
@@ -478,8 +478,8 @@ test('flyToLocation emits, can stay in globe mode, and can enter map mode', asyn
   assert.ok(Math.abs(mapState.zoom - 8) < 0.01);
 });
 
-test('flyToTarget settles on Earth, Moon, and Sun with finite camera state', async ({ page }) => {
-  const targets = ['moon', 'sun', 'earth'];
+test('flyToTarget settles on Earth, Moon, Mars, and Sun with finite camera state', async ({ page }) => {
+  const targets = ['moon', 'mars', 'sun', 'earth'];
   for (const target of targets) {
     await page.evaluate(name => window.EarthSystem.flyToTarget(name), target);
     await page.waitForFunction(name => !window.EarthSystem.getState().mode.includes('map') &&
@@ -873,17 +873,20 @@ test('loads expected high-resolution texture maps', async ({ page }) => {
       loadImage(api.config.assets.earthNormal),
       loadImage(api.config.assets.earthSpecular),
       loadImage(api.config.assets.moon),
+      loadImage(api.config.assets.mars),
       loadImage(api.config.assets.sun)
-    ]).then(([earthDayAsset, earthNightAsset, earthNormalAsset, earthSpecularAsset, moonAsset, sunAsset]) => ({
+    ]).then(([earthDayAsset, earthNightAsset, earthNormalAsset, earthSpecularAsset, moonAsset, marsAsset, sunAsset]) => ({
       earthDay: read(api.earth.material.map),
       earthNormal: read(api.earth.material.normalMap),
       earthSpecular: read(api.earth.material.specularMap),
       moon: read(api.moon.material.map),
+      mars: read(api.mars.material.map),
       earthDayAsset,
       earthNightAsset,
       earthNormalAsset,
       earthSpecularAsset,
       moonAsset,
+      marsAsset,
       sunAsset,
       assets: api.config.assets
     }));
@@ -894,6 +897,7 @@ test('loads expected high-resolution texture maps', async ({ page }) => {
   assert.match(textures.assets.earthNormal, /earth_normal_2048\.jpg$/);
   assert.match(textures.assets.earthSpecular, /earth_specular_2048\.jpg$/);
   assert.match(textures.assets.moon, /moon-8k\.jpg$/);
+  assert.match(textures.assets.mars, /mars-viking-mdim21-1km\.jpg$/);
   assert.match(textures.assets.sun, /sun_disk\.jpg$/);
 
   assert.equal(textures.earthDay.isTexture, true);
@@ -921,6 +925,12 @@ test('loads expected high-resolution texture maps', async ({ page }) => {
   assert.ok(textures.moon.height >= 4096, 'Moon texture should be 4K tall');
   assert.ok(textures.moonAsset.width >= 8192, 'Moon source asset should be 8K wide');
   assert.ok(textures.moonAsset.height >= 4096, 'Moon source asset should be 4K tall');
+
+  assert.equal(textures.mars.isTexture, true);
+  assert.ok(textures.mars.width >= 8192, 'Mars texture should be at least 8K wide');
+  assert.ok(textures.mars.height >= 4096, 'Mars texture should be at least 4K tall');
+  assert.ok(textures.marsAsset.width >= 8192, 'Mars source asset should be at least 8K wide');
+  assert.ok(textures.marsAsset.height >= 4096, 'Mars source asset should be at least 4K tall');
 
   assert.ok(textures.sunAsset.width >= 2048, 'Sun source asset should be at least 2048 wide');
   assert.ok(textures.sunAsset.height >= 2048, 'Sun source asset should be at least 2048 tall');

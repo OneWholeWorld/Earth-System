@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Earth Clock Map</title>
+<link rel="icon" href="data:,">
+<style>
+:root{
+  color-scheme:dark;
+  --ink:#f7fbff;
+  --muted:#9fb0c3;
+  --glass:rgba(5,12,20,.70);
+  --line:rgba(255,255,255,.14);
+  --day:#f7c95f;
+  --night:#6fa8ff;
+  --dawn:#ff9f6e;
+  --morning:#59bfff;
+  --noon:#ffe59a;
+  --afternoon:#4aa8ff;
+  --dusk:#f97373;
+  --twilight:#7b8cff;
+  --deep-night:#263a7a;
+  --moonlight:#b7d4ff;
+  --planet:#58b7ff;
+  --orbit:#f4d06f;
+  --galaxy:#ff6b8b;
+  --year:#c4a5ff;
+  --spring:#86efac;
+  --summer:#f7c95f;
+  --autumn:#f59e6b;
+  --winter:#8ec5ff;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:#03070d;color:var(--ink);font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+canvas{display:block}
+#c{position:fixed;inset:0;z-index:2;cursor:grab;transition:opacity .6s ease}
+#c:active{cursor:grabbing}
+#map-container{position:fixed;inset:0;z-index:1;opacity:0;pointer-events:none;transition:opacity .6s ease;background:#03070d}
+body.micro-view #c{opacity:0;pointer-events:none}
+body.micro-view #map-container{opacity:1;pointer-events:auto}
+.map-coordinate-chip{position:fixed;left:50%;top:18px;z-index:5;transform:translateX(-50%);max-width:min(520px,calc(100vw - 580px));border:1px solid rgba(255,255,255,.16);border-radius:999px;background:rgba(5,12,20,.70);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 16px 42px rgba(0,0,0,.32);padding:9px 14px;color:#dceaff;font-size:11px;font-weight:800;letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:0;pointer-events:none;transition:opacity .35s ease}
+body.micro-view .map-coordinate-chip{opacity:1}
+.fallback-space{position:fixed;inset:0;z-index:0;background:radial-gradient(circle at 28% 18%,rgba(111,168,255,.18),transparent 30%),radial-gradient(circle at 76% 74%,rgba(79,209,197,.11),transparent 28%),linear-gradient(140deg,#02040a 0%,#0b1520 48%,#06090f 100%)}
+.fallback-space:before{content:"";position:absolute;inset:0;background-image:radial-gradient(circle,rgba(255,255,255,.72) 0 1px,transparent 1.6px);background-size:67px 67px;opacity:.20}
+#ui-container{position:fixed;left:20px;bottom:20px;z-index:7;transition:opacity .35s ease}
+body.micro-view #ui-container{opacity:0;pointer-events:none}
+#target-btn{min-width:112px;height:38px;border-radius:999px;border:1px solid rgba(255,255,255,.16);background:rgba(5,12,20,.78);color:var(--ink);box-shadow:0 16px 42px rgba(0,0,0,.36);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);font:850 12px/1 Inter,system-ui,sans-serif;cursor:pointer;padding:0 14px}
+#target-btn:hover{background:rgba(255,255,255,.11)}
+.dropdown-content{display:none;position:absolute;left:0;bottom:calc(100% + 8px);min-width:136px;overflow:hidden;border:1px solid rgba(255,255,255,.13);border-radius:12px;background:rgba(5,12,20,.92);box-shadow:0 18px 48px rgba(0,0,0,.45);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
+.dropdown-content.show{display:block}
+.dropdown-item{padding:10px 13px;color:#eef4ff;font-size:12px;font-weight:750;cursor:pointer}
+.dropdown-item:hover{background:rgba(255,255,255,.10)}
+.dropdown-item.active{color:#f4d06f;background:rgba(244,208,111,.13)}
+.clock-rail{position:fixed;left:16px;top:16px;bottom:16px;z-index:6;width:262px;display:flex;flex-direction:column;gap:10px;pointer-events:none}
+.clock-card{pointer-events:auto;border:1px solid var(--line);border-radius:8px;background:linear-gradient(180deg,rgba(5,12,20,.76),rgba(5,12,20,.56));backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 18px 54px rgba(0,0,0,.35);padding:10px}
+.coordinate-card{position:fixed;right:20px;top:16px;width:312px;max-height:calc(100vh - 96px);overflow:auto}
+.clock-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:4px}
+.clock-title{margin:0;color:var(--ink);font-size:12px;font-weight:850;letter-spacing:.02em}
+.coordinate-card .clock-title{font-size:12px;white-space:nowrap}
+.clock-meta{margin:2px 0 0;color:var(--muted);font-size:10px;font-weight:700;line-height:1.25}
+.clock-value{color:#dceaff;font-size:10px;font-weight:800;text-align:right;line-height:1.25;min-width:70px}
+.mini-clock{width:100%;height:auto;display:block;overflow:visible;filter:drop-shadow(0 14px 24px rgba(0,0,0,.36))}
+.sky-window{border-radius:7px;cursor:default}
+.ring-bg{fill:rgba(3,8,14,.46);stroke:rgba(255,255,255,.12);stroke-width:1}
+.tick{stroke:rgba(255,255,255,.28);stroke-linecap:round}
+.tick.major{stroke:rgba(255,255,255,.62);stroke-width:1.5}
+.arc-track{fill:none;stroke:rgba(255,255,255,.08);stroke-linecap:round}
+.arc{fill:none;stroke-linecap:round;filter:drop-shadow(0 0 7px currentColor)}
+.hand{stroke:#f9fdff;stroke-linecap:round;filter:drop-shadow(0 0 7px rgba(255,255,255,.58))}
+.pin{fill:#f9fdff;stroke:rgba(3,8,14,.85);stroke-width:2.5}
+.svg-label{fill:rgba(235,244,255,.88);font-size:9px;font-weight:850;letter-spacing:0;text-anchor:middle}
+.svg-small{fill:rgba(194,207,223,.94);font-size:8.6px;font-weight:850;letter-spacing:.02em;text-anchor:middle}
+.legend{display:grid;grid-template-columns:1fr 1fr;gap:4px 7px;margin-top:3px;color:#c9d8ea;font-size:9.5px;font-weight:750}
+.legend span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.legend.compact{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:9.4px}
+.coordinate-focus-label{margin:2px 0 4px;color:#c9d8ea;font-size:9.2px;font-weight:850;text-align:center;letter-spacing:.02em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.coord-labels{margin-top:6px;display:grid;gap:4px;color:#d8e6f5;font-size:8.7px;font-weight:760;line-height:1.22}
+.coord-labels div{padding:5px 6px;border:1px solid rgba(255,255,255,.09);border-radius:6px;background:rgba(255,255,255,.045);overflow-wrap:anywhere}
+.coord-labels b{color:#9fb0c3;margin-right:4px}
+.pzero-button{width:100%;margin-top:6px;border:1px solid rgba(88,183,255,.22);border-radius:999px;background:rgba(88,183,255,.10);color:#dceaff;padding:7px 9px;font:850 9px/1.18 Inter,system-ui,sans-serif;text-align:left;cursor:pointer;box-shadow:0 10px 24px rgba(0,0,0,.18)}
+.pzero-button:hover{background:rgba(88,183,255,.17);border-color:rgba(88,183,255,.36)}
+.epoch-control{margin-top:7px;padding:7px;border:1px solid rgba(255,255,255,.10);border-radius:7px;background:rgba(255,255,255,.045)}
+.epoch-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:5px;color:#9fb0c3;font-size:8.8px;font-weight:850;letter-spacing:.02em;text-transform:uppercase}
+.epoch-row button{border:1px solid rgba(255,255,255,.13);border-radius:999px;background:rgba(255,255,255,.07);color:#dceaff;padding:4px 7px;font:850 8.6px/1 Inter,system-ui,sans-serif;cursor:pointer}
+.epoch-row button:hover{background:rgba(255,255,255,.13)}
+#zeroEpochInput{width:100%;height:30px;border:1px solid rgba(255,255,255,.13);border-radius:6px;background:rgba(3,8,14,.64);color:#eef6ff;padding:0 7px;font:800 10px/1 Inter,system-ui,sans-serif;outline:none}
+#zeroEpochInput:focus{border-color:rgba(88,183,255,.58);box-shadow:0 0 0 3px rgba(88,183,255,.12)}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:4px;box-shadow:0 0 10px currentColor}
+.city-picker{position:fixed;right:20px;bottom:20px;z-index:7;width:290px;font:12px Inter,system-ui,sans-serif}
+.city-wrap{position:relative}
+#citySearch{width:100%;height:42px;border-radius:999px;border:1px solid rgba(255,255,255,.16);outline:none;background:rgba(5,12,20,.78);color:var(--ink);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 16px 42px rgba(0,0,0,.36);padding:0 42px 0 14px;font:750 13px/1 Inter,system-ui,sans-serif}
+#citySearch:focus{border-color:rgba(79,209,197,.68);box-shadow:0 0 0 3px rgba(79,209,197,.13),0 16px 42px rgba(0,0,0,.36)}
+#clearCity{display:none;position:absolute;right:6px;top:50%;transform:translateY(-50%);width:30px;height:30px;border:0;border-radius:999px;background:rgba(255,255,255,.11);color:#e6f0fb;font-size:18px;line-height:1;cursor:pointer}
+#clearCity:hover{background:rgba(255,255,255,.18)}
+#citySuggestions{display:none;position:absolute;left:0;right:0;bottom:calc(100% + 8px);max-height:238px;overflow:auto;border:1px solid rgba(255,255,255,.13);border-radius:14px;background:rgba(5,12,20,.92);box-shadow:0 18px 48px rgba(0,0,0,.45);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
+.suggestion{width:100%;display:grid;grid-template-columns:1fr auto;gap:10px;border:0;border-bottom:1px solid rgba(255,255,255,.08);background:transparent;color:var(--ink);text-align:left;padding:9px 11px;cursor:pointer}
+.suggestion:hover,.suggestion.active{background:rgba(79,209,197,.12)}
+.suggestion strong{display:block;font-size:12px}
+.suggestion span{display:block;margin-top:2px;color:var(--muted);font-size:10px}
+.suggestion em{align-self:center;color:#d6e2f1;font-style:normal;font-size:10px}
+.status{display:none}
+@media (max-width:760px){
+  .clock-rail{width:180px;left:10px;top:10px;bottom:auto;gap:8px}
+  .coordinate-card{position:fixed;right:10px;top:10px;width:212px;max-height:calc(100vh - 84px)}
+  .coordinate-card .clock-title{font-size:12px}
+  .clock-card{padding:8px}
+  .legend{display:none}
+  .map-coordinate-chip{left:10px;right:10px;top:auto;bottom:62px;max-width:none;transform:none}
+  .city-picker{right:10px;bottom:10px;width:min(290px,calc(100vw - 20px))}
+  #ui-container{left:10px;bottom:62px}
+  .status{right:12px;bottom:60px}
+}
+</style>
+</head>
+<body>
+<div class="fallback-space" aria-hidden="true"></div>
+<canvas id="c"></canvas>
+<div id="map-container"></div>
+<div id="mapCoordinateChip" class="map-coordinate-chip">E-- | M--</div>
+<div id="ui-container" aria-hidden="true">
+  <button id="target-btn" type="button">Earth ▾</button>
+  <div id="dropdown-menu" class="dropdown-content">
+    <div class="dropdown-item active" data-target="earth">Earth</div>
+    <div class="dropdown-item" data-target="moon">Moon</div>
+    <div class="dropdown-item" data-target="mars">Mars</div>
+    <div class="dropdown-item" data-target="sun">Sun</div>
+  </div>
+</div>
+
+<aside class="clock-rail" aria-label="Earth clock stack">
+  <section class="clock-card">
+    <div class="clock-head">
+      <div>
+        <h2 class="clock-title">Day Arc</h2>
+        <p id="dayNightMeta" class="clock-meta">Loading city arc</p>
+      </div>
+      <div id="dayNightValue" class="clock-value">T--</div>
+    </div>
+    <svg id="dayNightClock" class="mini-clock sky-window" viewBox="0 0 220 178" role="img" aria-label="Selected city local sky window"></svg>
+  </section>
+  <section class="clock-card">
+    <div class="clock-head">
+      <div>
+        <h2 class="clock-title">Season Arc</h2>
+        <p id="seasonMeta" class="clock-meta">Seasonal sky window</p>
+      </div>
+      <div id="seasonValue" class="clock-value">O--</div>
+    </div>
+    <svg id="seasonClock" class="mini-clock sky-window" viewBox="0 0 220 176" role="img" aria-label="Seasonal weather arc window"></svg>
+  </section>
+  <section class="clock-card coordinate-card">
+    <div class="clock-head">
+      <div>
+        <h2 class="clock-title">Earth Space Time Coordinate</h2>
+        <p id="wstcMeta" class="clock-meta"></p>
+      </div>
+      <div id="wstcValue" class="clock-value"></div>
+    </div>
+    <svg id="wstcClock" class="mini-clock" viewBox="0 0 220 220" role="img" aria-label="Combined ESTC and WSTC clock"></svg>
+    <div id="coordinateFocusLabel" class="coordinate-focus-label">Earth focus</div>
+    <div class="legend compact">
+      <span><i class="dot" style="background:var(--planet);color:var(--planet)"></i>Planet</span>
+      <span><i class="dot" style="background:var(--orbit);color:var(--orbit)"></i>Star</span>
+      <span><i class="dot" style="background:var(--galaxy);color:var(--galaxy)"></i>Galaxy</span>
+    </div>
+    <div class="coord-labels" aria-label="Complete coordinates">
+      <div><b>ESTC</b><span id="estcFullLabel">--</span></div>
+      <div><b>WSTC</b><span id="wstcFullLabel">--</span></div>
+    </div>
+    <button id="pZeroButton" class="pzero-button" type="button">P0 --</button>
+    <div class="epoch-control" aria-label="Zero Epoch control">
+      <div class="epoch-row">
+        <span>Zero Epoch UTC</span>
+        <button id="resetEpochButton" type="button">Reset</button>
+      </div>
+      <input id="zeroEpochInput" type="datetime-local" value="1974-03-13T04:40">
+    </div>
+  </section>
+</aside>
+
+<div id="statusChip" class="status">Loading earth-clock-map</div>
+<div class="city-picker">
+  <div class="city-wrap">
+    <input id="citySearch" type="text" autocomplete="off" placeholder="Select a city..." role="combobox" aria-expanded="false" aria-controls="citySuggestions" aria-label="City">
+    <button id="clearCity" aria-label="Clear city">&times;</button>
+    <div id="citySuggestions" role="listbox"></div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+<script>
+window.EARTH_CORE_ASSET_BASE = '../earth-core/assets/';
+</script>
+<script src="../earth-core/earth-core.js?v=mars-texture-1"></script>
+<script src="./world-space-time-coordinates.js?v=36"></script>
+<script src="./earth-space-time-coordinates.js?v=1"></script>
+<script src="./moon-space-time-coordinates.js?v=1"></script>
+<script src="./mars-space-time-coordinates.js?v=1"></script>
+<script src="./earth-clock-map-app.js?v=42"></script>
+</body>
+</html>

@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "test:earth-core": "node tests/earth-core/run-earth-core-tests.mjs",
-    "test:earth-health-energy": "node tests/earth-health-energy/run-earth-health-energy-tests.mjs"
+    "test:earth-health-energy": "node tests/earth-health-energy/run-earth-health-energy-tests.mjs",
+    "test:wstc": "node tests/earth-clock-map/run-wstc-api-tests.mjs"
   },
   "devDependencies": {
     "playwright": "^1.52.0"
