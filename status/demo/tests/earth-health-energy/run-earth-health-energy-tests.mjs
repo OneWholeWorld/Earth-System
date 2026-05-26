@@ -169,6 +169,31 @@ async function clickEnergyNode(page, name) {
   return node;
 }
 
+async function clickVisibleEnergyNode(page, excludeName = null) {
+  await page.waitForFunction(nameToExclude => {
+    const state = window.EarthHealthEnergyApp.getState();
+    return state.energySystems.some(system => system.name !== nameToExclude &&
+      system.visible &&
+      system.screenZ < 1 &&
+      system.screenX > 40 &&
+      system.screenX < window.innerWidth - 40 &&
+      system.screenY > 40 &&
+      system.screenY < window.innerHeight - 40);
+  }, excludeName, { timeout: 5000 });
+  const node = await page.evaluate(nameToExclude =>
+    window.EarthHealthEnergyApp.getState().energySystems.find(system => system.name !== nameToExclude &&
+      system.visible &&
+      system.screenZ < 1 &&
+      system.screenX > 40 &&
+      system.screenX < window.innerWidth - 40 &&
+      system.screenY > 40 &&
+      system.screenY < window.innerHeight - 40),
+  excludeName);
+  await page.mouse.click(node.screenX, node.screenY);
+  await page.waitForFunction(targetName => window.EarthHealthEnergyApp.getState().selectedEnergyName === targetName, node.name);
+  return node;
+}
+
 test('boots on earth-core and loads the full city dataset', async ({ page }) => {
   const state = await appState(page);
   assert.equal(windowIsObject(await page.evaluate(() => window.EarthSystem)), true);
@@ -177,7 +202,7 @@ test('boots on earth-core and loads the full city dataset', async ({ page }) => 
   assert.equal(state.healthCityCount, 47805);
   assert.equal(state.displayedHealthCityCount, 47805);
   assert.equal(state.healthGeoJSONFeatureCount, 47805);
-  assert.equal(state.energySystemCount, 9);
+  assert.equal(state.energySystemCount, 17);
   assert.ok(state.fullPopulationMaxPop > 30000000);
   assert.equal(await page.locator('#status-chip').innerText(), 'earth-core layered app');
 });
@@ -191,6 +216,8 @@ test('Energy mode toggles panel state and remains mutually exclusive with Health
   assert.equal(await page.locator('#showHealthBtn').isVisible(), false);
   assert.equal(await page.locator('#inspectPanel').evaluate(el => el.classList.contains('visible')), true);
   assert.match(await page.locator('#inspectTitle').innerText(), /Goa|Inspect System/);
+  assert.equal(await page.locator('#heightRangeControl').evaluate(el => getComputedStyle(el).display), 'none');
+  assert.equal(await page.locator('#healthClusterBtn').evaluate(el => getComputedStyle(el).display), 'none');
 
   await page.click('#closeInspectBtn');
   assert.equal(await page.locator('#inspectPanel').evaluate(el => el.classList.contains('visible')), false);
@@ -204,7 +231,7 @@ test('Energy mode toggles panel state and remains mutually exclusive with Health
   assert.equal(await page.locator('#showHealthBtn').isVisible(), true);
 });
 
-test('Energy controls toggle ascend state and stay hidden away from Earth globe', async ({ page }) => {
+test('Energy controls toggle ascend state with oracle timing and stay active during target flights', async ({ page }) => {
   await showEnergy(page);
   await page.waitForTimeout(250);
   let state = await appState(page);
@@ -213,24 +240,44 @@ test('Energy controls toggle ascend state and stay hidden away from Earth globe'
   assert.equal(state.elevatedEnergy, false);
   assert.equal(state.energyLayerVisible, true);
   assert.equal(await page.locator('#elevateBtn').innerText(), 'Ascend');
+  const goaBefore = state.energySystems.find(system => system.name === 'Goa');
 
   await page.click('#elevateBtn');
+  await page.waitForTimeout(80);
   state = await appState(page);
   assert.equal(state.elevatedEnergy, true);
   assert.equal(await page.locator('#elevateBtn').innerText(), 'Descend');
+  let goaDuringAscend = state.energySystems.find(system => system.name === 'Goa');
+  assert.ok(goaDuringAscend.y > goaBefore.y, 'Goa should begin ascending');
+  assert.ok(goaDuringAscend.y < 0.9, 'Ascend should use oracle staged timing, not jump directly to elevated layout');
 
-  await page.evaluate(() => window.EarthSystem.flyToTarget('moon'));
+  await page.waitForTimeout(3500);
+  state = await appState(page);
+  const goaElevated = state.energySystems.find(system => system.name === 'Goa');
+  assert.ok(goaElevated.y > 1.05, 'Goa should finish near the elevated focus position');
+
+  await page.click('#target-btn');
+  await page.click('.dropdown-item[data-target="moon"]');
   await page.waitForFunction(() => window.EarthSystem.getState().target === 'moon', null, { timeout: 5000 });
   await page.waitForTimeout(300);
   state = await appState(page);
   assert.equal(state.energyMode, true);
-  assert.equal(state.energyLayerVisible, false);
+  assert.equal(state.energyLayerVisible, true);
 
   await page.evaluate(() => window.EarthSystem.flyToTarget('earth'));
   await page.waitForFunction(() => window.EarthSystem.getState().target === 'earth', null, { timeout: 5000 });
-  await page.waitForTimeout(2700);
+  await page.waitForTimeout(300);
   state = await appState(page);
   assert.equal(state.energyLayerVisible, true);
+
+  await page.click('#elevateBtn');
+  await page.waitForTimeout(80);
+  state = await appState(page);
+  assert.equal(state.elevatedEnergy, false);
+  assert.equal(await page.locator('#elevateBtn').innerText(), 'Ascend');
+  const goaDuringDescend = state.energySystems.find(system => system.name === 'Goa');
+  assert.ok(goaDuringDescend.y < goaElevated.y, 'Goa should begin descending');
+  assert.ok(goaDuringDescend.y > goaBefore.y, 'Descend should use oracle slower staged return, not snap to Earth');
 });
 
 test('Energy node click selects a system and Satisfied/Not Satisfied controls update state', async ({ page }) => {
@@ -268,26 +315,27 @@ test('Energy node click selects a system and Satisfied/Not Satisfied controls up
 test('Energy Focus control changes the focused node and keeps connection arcs active', async ({ page }) => {
   await showEnergy(page);
   await page.waitForTimeout(500);
-  await clickEnergyNode(page, 'Delhi');
+  const clicked = await clickVisibleEnergyNode(page, 'Goa');
   await page.click('#focusEnergyBtn');
-  await page.waitForFunction(() => window.EarthHealthEnergyApp.getState().focusedEnergyName === 'Delhi');
+  await page.waitForFunction(name => window.EarthHealthEnergyApp.getState().focusedEnergyName === name, clicked.name);
   const state = await appState(page);
-  const delhi = state.energySystems.find(system => system.name === 'Delhi');
+  const focused = state.energySystems.find(system => system.name === clicked.name);
   const goa = state.energySystems.find(system => system.name === 'Goa');
-  assert.equal(state.focusedEnergyName, 'Delhi');
-  assert.equal(delhi.focused, true);
+  assert.equal(state.focusedEnergyName, clicked.name);
+  assert.equal(focused.focused, true);
   assert.equal(goa.focused, false);
 });
 
 test('Dragging the 3D globe in Energy mode does not select a node on release', async ({ page }) => {
   await showEnergy(page);
+  const before = await appState(page);
   await page.mouse.move(620, 420);
   await page.mouse.down();
   await page.mouse.move(820, 560, { steps: 10 });
   await page.mouse.up();
   await page.waitForTimeout(200);
   const state = await appState(page);
-  assert.equal(state.selectedEnergyName, null);
+  assert.equal(state.selectedEnergyName, before.selectedEnergyName);
 });
 
 test('Energy layer hides in 2D map mode and restores in 3D globe mode', async ({ page }) => {

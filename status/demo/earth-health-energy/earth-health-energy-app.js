@@ -3,14 +3,22 @@
   const FLY_TO_CITY_2D_ZOOM = 10.4;
   const ENERGY_SYSTEMS = [
     { name: 'Goa', lat: 15.5588, lng: 73.7700, primary: true },
+    { name: 'Milan', lat: 45.4642, lng: 9.1900 },
+    { name: 'Charlotte', lat: 35.2271, lng: -80.8431 },
     { name: 'Portland', lat: 45.5152, lng: -122.6784 },
     { name: 'Pune', lat: 18.5204, lng: 73.8567 },
+    { name: 'Chandigarh', lat: 30.7333, lng: 76.7794 },
     { name: 'Delhi', lat: 28.6139, lng: 77.2090 },
+    { name: 'Bozeman', lat: 45.6770, lng: -111.0429 },
     { name: 'Victoria', lat: 48.4284, lng: -123.3656 },
+    { name: 'Manchester', lat: 53.4808, lng: -2.2426 },
     { name: 'Chicago', lat: 41.8781, lng: -87.6298 },
     { name: 'Sydney', lat: -33.8688, lng: 151.2093 },
     { name: 'Bangalore', lat: 12.9716, lng: 77.5946 },
-    { name: 'Singapore', lat: 1.3521, lng: 103.8198 }
+    { name: 'Chennai', lat: 13.0827, lng: 80.2707 },
+    { name: 'Singapore', lat: 1.3521, lng: 103.8198 },
+    { name: 'Amritsar', lat: 31.6340, lng: 74.8723 },
+    { name: 'Indore', lat: 22.7196, lng: 75.8577 }
   ];
 
   let api;
@@ -218,7 +226,7 @@
   function showPanel(mode, payload) {
     els.inspectPanel.classList.add('visible');
     document.body.classList.toggle('health-panel-mode', mode === 'health');
-    const healthControls = [els.healthPositiveBtn, els.healthNegativeBtn, els.healthClusterBtn, els.heightRangeMax.parentElement];
+    const healthControls = [els.healthPositiveBtn, els.healthNegativeBtn, els.healthClusterBtn, document.getElementById('heightRangeControl')];
     const energyControls = [els.satisfiedBtn, els.notSatisfiedBtn, els.focusEnergyBtn, els.elevateBtn];
     healthControls.forEach(el => { el.style.display = mode === 'health' ? 'block' : 'none'; });
     energyControls.forEach(el => { el.style.display = mode === 'energy' ? 'block' : 'none'; });
@@ -234,6 +242,12 @@
   function closePanel() {
     els.inspectPanel.classList.remove('visible');
     if ((healthMode || energyMode) && els.openFiltersBtn) els.openFiltersBtn.classList.add('visible');
+  }
+
+  function resetEnergyElevation() {
+    elevatedEnergy = false;
+    if (energyLayer && typeof energyLayer.resetElevation === 'function') energyLayer.resetElevation();
+    els.elevateBtn.textContent = 'Ascend';
   }
 
   function restorePanel() {
@@ -269,82 +283,408 @@
     const group = new THREE.Group();
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
+    let globalMaxArcLength = 0;
+    let energyTime = 0;
+    let elevateBlend = 0.0;
+    let elevateTransitionActive = false;
+    let autoPanDelay = 0.0;
+    let descendCameraRadius = api.getState().orbit.radius;
+    let formationRetargetActive = false;
+    let formationRetargetBlend = 1.0;
+    const formationRetargetStarts = new Map();
+    const COLORS = {
+      defaultDome: 0x6fbaff,
+      defaultGlow: 0x4da6ff,
+      defaultRing: 0x4da6ff,
+      defaultPulse: 0xffd700,
+      selectedRing: 0xffd700,
+      satisfied: 0x16a34a,
+      notSatisfied: 0xdc2626
+    };
+    const arcShaderSource = {
+      uniforms: {
+        time: { value: 0 },
+        colorGoa: { value: new THREE.Color(0xffd700) },
+        colorSys: { value: new THREE.Color(0xffd700) },
+        isCore: { value: 1.0 },
+        arcLength: { value: 1.0 },
+        maxArcLength: { value: 1.0 }
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform float time;
+        uniform vec3 colorGoa;
+        uniform vec3 colorSys;
+        uniform float isCore;
+        uniform float arcLength;
+        uniform float maxArcLength;
+        varying vec2 vUv;
+        void main() {
+          float V = 0.15;
+          float D_leg = maxArcLength + 0.5;
+          float D_cycle = D_leg * 2.0;
+          float d_total = time * V;
+          float d_mod = mod(d_total, D_cycle);
+          float isRev = step(D_leg, d_mod);
+          float head_pos = d_mod - isRev * D_leg;
+          float x_fwd = (1.0 - vUv.x) * arcLength;
+          float x_rev = vUv.x * arcLength;
+          float x_pixel = mix(x_fwd, x_rev, isRev);
+          float dBehind = head_pos - x_pixel;
+          float validMask = step(0.0, dBehind);
+          float L_tail = 0.45;
+          float L_head = 0.035;
+          float trail = smoothstep(L_tail, 0.0, dBehind) * validMask;
+          float head = smoothstep(L_head, 0.0, dBehind) * validMask;
+          float baseAlpha = isCore > 0.5 ? 0.25 : 0.06;
+          float pulseAlpha = trail * 0.6 + head * 1.0;
+          if (isCore < 0.5) pulseAlpha *= 0.5;
+          vec3 travelColor = mix(colorSys, colorGoa, isRev);
+          vec3 previousColor = mix(colorGoa, colorSys, isRev);
+          vec3 baseColor = mix(previousColor, travelColor, validMask);
+          vec3 goldColor = vec3(1.0, 0.843, 0.0);
+          float baseIsGold = 1.0 - smoothstep(0.05, 0.25, distance(baseColor, goldColor));
+          float baseBoost = 1.0 + (1.0 - baseIsGold) * 0.5;
+          baseColor = min(baseColor * baseBoost, vec3(1.0));
+          vec3 finalColor = baseColor + (travelColor * pulseAlpha * 2.0);
+          float outAlpha = (baseAlpha + pulseAlpha) * smoothstep(0.0, 0.05, vUv.x) * smoothstep(1.0, 0.95, vUv.x);
+          gl_FragColor = vec4(finalColor, outAlpha);
+        }
+      `
+    };
+    function createArcLine() {
+      const placeholderCurve = new THREE.QuadraticBezierCurve3(
+        new THREE.Vector3(0, 0, 0),
+        new THREE.Vector3(0, 0.2, 0),
+        new THREE.Vector3(0.2, 0, 0)
+      );
+      const matCore = new THREE.ShaderMaterial({
+        uniforms: THREE.UniformsUtils.clone(arcShaderSource.uniforms),
+        vertexShader: arcShaderSource.vertexShader,
+        fragmentShader: arcShaderSource.fragmentShader,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      });
+      matCore.uniforms.isCore.value = 1.0;
+      const matGlow = new THREE.ShaderMaterial({
+        uniforms: THREE.UniformsUtils.clone(arcShaderSource.uniforms),
+        vertexShader: arcShaderSource.vertexShader,
+        fragmentShader: arcShaderSource.fragmentShader,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      });
+      matGlow.uniforms.isCore.value = 0.0;
+      const tubeCore = new THREE.Mesh(new THREE.TubeGeometry(placeholderCurve, 64, 0.0015, 8, false), matCore);
+      const tubeGlow = new THREE.Mesh(new THREE.TubeGeometry(placeholderCurve, 64, 0.0045, 8, false), matGlow);
+      tubeCore.visible = false;
+      tubeGlow.visible = false;
+      group.add(tubeCore, tubeGlow);
+      return { tubeCore, tubeGlow };
+    }
     const systems = ENERGY_SYSTEMS.map((data, index) => {
       const node = new THREE.Group();
-      const dome = new THREE.Mesh(new THREE.SphereGeometry(data.primary ? 0.052 : 0.036, 32, 18), new THREE.MeshBasicMaterial({ color: 0x6fbaff, transparent: true, opacity: 0.95 }));
-      const glow = new THREE.Mesh(new THREE.SphereGeometry(data.primary ? 0.12 : 0.082, 32, 18), new THREE.MeshBasicMaterial({ color: 0x4da6ff, transparent: true, opacity: 0.08, blending: THREE.AdditiveBlending, depthWrite: false }));
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(data.primary ? 0.076 : 0.055, 0.003, 10, 48), new THREE.MeshBasicMaterial({ color: 0xffd700, transparent: true, opacity: 0.0 }));
+      const dome = new THREE.Mesh(new THREE.SphereGeometry(0.0225, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshBasicMaterial({ color: COLORS.defaultDome }));
+      const glow = new THREE.Mesh(new THREE.SphereGeometry(0.0275, 20, 20), new THREE.MeshBasicMaterial({ color: COLORS.defaultGlow, transparent: true, opacity: 0.06 }));
+      const ring = new THREE.Mesh(new THREE.RingGeometry(0.025, 0.036, 64), new THREE.MeshBasicMaterial({ color: COLORS.defaultRing, transparent: true, opacity: 0.95, side: THREE.DoubleSide }));
+      ring.rotation.x = -Math.PI / 2;
       node.add(glow, dome, ring);
       group.add(node);
-      return { ...data, index, node, dome, glow, ring, state: 'default', currentAnchor: new THREE.Vector3() };
+      return {
+        ...data,
+        index,
+        node,
+        dome,
+        glow,
+        ring,
+        state: 'default',
+        currentPosition: new THREE.Vector3(),
+        currentAnchor: new THREE.Vector3(),
+        currentOutward: new THREE.Vector3(0, 1, 0),
+        surfaceNormal: new THREE.Vector3(0, 1, 0),
+        earthPosition: new THREE.Vector3(),
+        earthAnchor: new THREE.Vector3()
+      };
     });
     focusedEnergySystem = systems[0];
     const arcLines = systems.slice(1).map(system => {
-      const line = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xffd700, transparent: true, opacity: 0.7 }));
-      group.add(line);
-      return { system, line };
+      return { system, arc: createArcLine() };
     });
 
     function colorForState(state) {
-      if (state === 'satisfied') return { dome: 0x16a34a, glow: 0x16a34a };
-      if (state === 'notSatisfied') return { dome: 0xdc2626, glow: 0xdc2626 };
-      return { dome: 0x6fbaff, glow: 0x4da6ff };
+      if (state === 'satisfied') return { dome: COLORS.satisfied, glow: COLORS.satisfied, ring: COLORS.defaultRing, pulse: COLORS.satisfied };
+      if (state === 'notSatisfied') return { dome: COLORS.notSatisfied, glow: COLORS.notSatisfied, ring: COLORS.defaultRing, pulse: COLORS.notSatisfied };
+      return { dome: COLORS.defaultDome, glow: COLORS.defaultGlow, ring: COLORS.defaultRing, pulse: COLORS.defaultPulse };
     }
 
-    function surfacePosition(system) {
-      return api.latLngToVec(system.lat, system.lng, 1.045)
-        .applyAxisAngle(new THREE.Vector3(0, 1, 0), api.earthGroup.rotation.y)
-        .multiplyScalar(api.earthGroup.scale.x);
+    function smoothstep01(x) {
+      const t = THREE.MathUtils.clamp(x, 0, 1);
+      return t * t * (3.0 - 2.0 * t);
     }
 
-    function elevatedPosition(system) {
-      if (system === focusedEnergySystem) return new THREE.Vector3(0, 1.13 * api.earthGroup.scale.x, 0);
+    function quadraticBezierVec3(p0, p1, p2, t) {
+      const omt = 1.0 - t;
+      return p0.clone().multiplyScalar(omt * omt)
+        .add(p1.clone().multiplyScalar(2.0 * omt * t))
+        .add(p2.clone().multiplyScalar(t * t));
+    }
+
+    function lerpAngle(current, target, amount) {
+      let delta = target - current;
+      while (delta > Math.PI) delta -= Math.PI * 2.0;
+      while (delta < -Math.PI) delta += Math.PI * 2.0;
+      return current + delta * amount;
+    }
+
+    function computeSurfaceState(system) {
+      const earthVisualScale = api.earthGroup.scale.x;
+      const surface = api.latLngToVec(system.lat, system.lng, 1.001)
+        .applyAxisAngle(new THREE.Vector3(0, 1, 0), api.earthGroup.rotation.y);
+      const outward = surface.clone().normalize();
+      const scaledSurface = surface.clone().multiplyScalar(earthVisualScale);
+      const position = scaledSurface.clone().add(outward.clone().multiplyScalar(0.02 * earthVisualScale));
+      const anchor = outward.clone().multiplyScalar(1.03 * earthVisualScale);
+      system.surfaceNormal.copy(outward);
+      system.earthPosition.copy(position);
+      system.earthAnchor.copy(anchor);
+    }
+
+    function computeStagedOrbitPosition(earthPos, surfaceNormal, targetPos, blend) {
+      const stageSplit = 0.5;
+      const orbitLift = 0.28;
+      const launchPoint = earthPos.clone().add(surfaceNormal.clone().multiplyScalar(orbitLift));
+      if (blend <= stageSplit) {
+        const t = smoothstep01(blend / stageSplit);
+        return earthPos.clone().lerp(launchPoint, t);
+      }
+      const t = smoothstep01((blend - stageSplit) / (1.0 - stageSplit));
+      const spaceMid = launchPoint.clone().add(targetPos).multiplyScalar(0.5);
+      const midNormal = spaceMid.clone().normalize();
+      const control = midNormal.multiplyScalar(Math.max(launchPoint.length(), targetPos.length()) + 0.18)
+        .add(new THREE.Vector3(0, 0.06, 0));
+      return quadraticBezierVec3(launchPoint, control, targetPos, t);
+    }
+
+    function elevatedLayoutTargets() {
+      const earthVisualScale = api.earthGroup.scale.x;
+      const center = new THREE.Vector3(0, 1.09 * earthVisualScale, 0);
+      const ringAxisA = new THREE.Vector3(1, 0, 0);
+      const ringAxisB = new THREE.Vector3(0, 0, 1);
       const others = systems.filter(item => item !== focusedEnergySystem);
-      const idx = Math.max(0, others.indexOf(system));
-      const angle = (idx / Math.max(1, others.length)) * Math.PI * 2 - Math.PI / 2;
-      const radius = 0.44 * api.earthGroup.scale.x;
-      return new THREE.Vector3(Math.cos(angle) * radius, 1.08 * api.earthGroup.scale.x, Math.sin(angle) * radius);
+      const ringRadius = 0.42 * earthVisualScale;
+      const focusLift = new THREE.Vector3(0, 0.04 * earthVisualScale, 0);
+      const targets = new Map();
+      targets.set(focusedEnergySystem, {
+        position: center.clone().add(focusLift),
+        anchor: center.clone().add(focusLift),
+        outward: new THREE.Vector3(0, 1, 0)
+      });
+      others.forEach((system, idx) => {
+        const angle = (idx / Math.max(1, others.length)) * Math.PI * 2 - Math.PI / 2;
+        const circularOffset = ringAxisA.clone().multiplyScalar(Math.cos(angle) * ringRadius)
+          .add(ringAxisB.clone().multiplyScalar(Math.sin(angle) * ringRadius));
+        const elevatedPos = center.clone().add(circularOffset);
+        const outward = elevatedPos.clone().sub(center).normalize().lerp(new THREE.Vector3(0, 1, 0), 0.35).normalize();
+        targets.set(system, {
+          position: elevatedPos,
+          anchor: elevatedPos.clone(),
+          outward
+        });
+      });
+      return targets;
     }
 
-    function arcPoints(a, b) {
-      const start = a.currentAnchor.clone();
-      const end = b.currentAnchor.clone();
-      const mid = start.clone().add(end).multiplyScalar(0.5);
-      const lift = elevatedEnergy ? 0.18 : Math.min(1.4, start.distanceTo(end) * 0.55);
-      const control = mid.lengthSq() ? mid.clone().normalize().multiplyScalar(mid.length() + lift) : new THREE.Vector3(0, 1, 0);
-      return new THREE.QuadraticBezierCurve3(start, control, end).getPoints(40);
+    function startFormationRetarget(newFocusSystem) {
+      formationRetargetStarts.clear();
+      systems.forEach(system => {
+        formationRetargetStarts.set(system, {
+          position: (system.currentPosition || system.node.position).clone(),
+          anchor: (system.currentAnchor || system.earthAnchor).clone(),
+          outward: (system.currentOutward || system.surfaceNormal).clone()
+        });
+      });
+      focusedEnergySystem = newFocusSystem;
+      formationRetargetActive = true;
+      formationRetargetBlend = 0.0;
+    }
+
+    function resetElevationState() {
+      elevatedEnergy = false;
+      elevateTransitionActive = true;
+      autoPanDelay = 0.0;
+      descendCameraRadius = api.getState().orbit.radius;
+      formationRetargetActive = false;
+      formationRetargetBlend = 1.0;
+      formationRetargetStarts.clear();
+      els.elevateBtn.textContent = 'Ascend';
+    }
+
+    function setFocused(system) {
+      if (!system) return;
+      if (elevatedEnergy && focusedEnergySystem !== system) startFormationRetarget(system);
+      else focusedEnergySystem = system;
+    }
+
+    function toggleElevation() {
+      if (!selectedEnergySystem) return;
+      if (elevatedEnergy && focusedEnergySystem === selectedEnergySystem) {
+        resetElevationState();
+      } else if (elevatedEnergy) {
+        startFormationRetarget(selectedEnergySystem);
+      } else {
+        focusedEnergySystem = selectedEnergySystem;
+        elevatedEnergy = true;
+        elevateTransitionActive = true;
+        autoPanDelay = 0.0;
+      }
+      els.elevateBtn.textContent = elevatedEnergy ? 'Descend' : 'Ascend';
+    }
+
+    function updateArcPositions(startVec, endVec, arcObj) {
+      const earthVisualScale = api.earthGroup.scale.x;
+      const surfaceAnchorRadius = 1.03 * earthVisualScale;
+      const startLen = startVec.length();
+      const endLen = endVec.length();
+      const avgLen = (startLen + endLen) * 0.5;
+      const styleBlendRaw = THREE.MathUtils.clamp((avgLen - surfaceAnchorRadius) / Math.max(0.01, 0.10 * earthVisualScale), 0, 1);
+      const styleBlend = styleBlendRaw * styleBlendRaw * (3.0 - 2.0 * styleBlendRaw);
+      const globeStart = startVec.clone().normalize().multiplyScalar(surfaceAnchorRadius);
+      const globeEnd = endVec.clone().normalize().multiplyScalar(surfaceAnchorRadius);
+      const globeMid = globeStart.clone().add(globeEnd).multiplyScalar(0.5).normalize();
+      const globeDistance = globeStart.distanceTo(globeEnd);
+      const globeLift = Math.min(1.4 * earthVisualScale, (0.35 * earthVisualScale) + globeDistance * 0.6);
+      const globeControl = globeMid.multiplyScalar(surfaceAnchorRadius + globeLift);
+      const spaceStart = startVec.clone();
+      const spaceEnd = endVec.clone();
+      const spaceMid = spaceStart.clone().add(spaceEnd).multiplyScalar(0.5);
+      const spaceDistance = spaceStart.distanceTo(spaceEnd);
+      const spaceMidRadius = spaceMid.length();
+      const spaceLift = Math.min(0.55, 0.12 + spaceDistance * 0.22);
+      const spaceControl = spaceMid.clone().normalize().multiplyScalar(spaceMidRadius + spaceLift);
+      const start = globeStart.clone().lerp(spaceStart, styleBlend);
+      const end = globeEnd.clone().lerp(spaceEnd, styleBlend);
+      const control = globeControl.clone().lerp(spaceControl, styleBlend);
+      const curve = new THREE.QuadraticBezierCurve3(start, control, end);
+      const trueArcLength = curve.getLength();
+      if (trueArcLength > globalMaxArcLength) globalMaxArcLength = trueArcLength;
+      arcObj.tubeCore.material.uniforms.arcLength.value = trueArcLength;
+      arcObj.tubeGlow.material.uniforms.arcLength.value = trueArcLength;
+      arcObj.tubeCore.material.uniforms.maxArcLength.value = globalMaxArcLength;
+      arcObj.tubeGlow.material.uniforms.maxArcLength.value = globalMaxArcLength;
+      if (arcObj.tubeCore.geometry) arcObj.tubeCore.geometry.dispose();
+      if (arcObj.tubeGlow.geometry) arcObj.tubeGlow.geometry.dispose();
+      arcObj.tubeCore.geometry = new THREE.TubeGeometry(curve, 64, 0.0015 * earthVisualScale, 8, false);
+      arcObj.tubeGlow.geometry = new THREE.TubeGeometry(curve, 64, 0.0045 * earthVisualScale, 8, false);
     }
 
     function setSelected(system) {
       selectedEnergySystem = system;
       showPanel('energy', system);
       if (els.openFiltersBtn) els.openFiltersBtn.classList.remove('visible');
-      systems.forEach(item => { item.ring.material.opacity = item === system ? 0.95 : 0; });
     }
 
     function update() {
-      const visible = energyMode && api.getState().mode === 'globe' && api.getState().target === 'earth';
+      const coreState = api.getState();
+      const visible = energyMode && coreState.mode === 'globe';
       group.visible = visible;
-      if (!visible) return;
-      const now = performance.now() * 0.001;
+      if (!visible) {
+        arcLines.forEach(({ arc }) => {
+          arc.tubeCore.visible = false;
+          arc.tubeGlow.visible = false;
+        });
+        return;
+      }
+      const elevateBlendRate = elevatedEnergy ? 0.01 : 0.005;
+      elevateBlend += ((elevatedEnergy ? 1.0 : 0.0) - elevateBlend) * elevateBlendRate;
+      const easedElevateBlend = elevateBlend * elevateBlend * (3.0 - 2.0 * elevateBlend);
+
+      if (elevateTransitionActive && elevatedEnergy && typeof api.setOrbit === 'function') {
+        autoPanDelay = Math.min(1.0, autoPanDelay + 0.01);
+        const delayedPanBlend = THREE.MathUtils.clamp((autoPanDelay - 0.16) / 0.58, 0, 1);
+        const easedPanBlend = delayedPanBlend * delayedPanBlend * (3.0 - 2.0 * delayedPanBlend);
+        api.setOrbit({ phi: coreState.orbit.phi + (1.25 - coreState.orbit.phi) * (0.006 * easedPanBlend) });
+        if (elevateBlend > 0.985) elevateTransitionActive = false;
+      }
+
       systems.forEach(system => {
-        const target = elevatedEnergy ? elevatedPosition(system) : surfacePosition(system);
-        system.node.position.lerp(target, 0.10);
-        const outward = system.node.position.lengthSq() ? system.node.position.clone().normalize() : new THREE.Vector3(0, 1, 0);
-        system.node.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), outward);
-        system.currentAnchor.copy(system.node.position.clone().add(outward.multiplyScalar(0.035)));
+        computeSurfaceState(system);
+      });
+
+      const elevatedTargets = elevatedLayoutTargets();
+      if (formationRetargetActive) {
+        formationRetargetBlend = Math.min(1.0, formationRetargetBlend + 0.0175);
+        if (formationRetargetBlend >= 0.999) {
+          formationRetargetActive = false;
+          formationRetargetBlend = 1.0;
+          formationRetargetStarts.clear();
+        }
+      }
+
+      systems.forEach(system => {
+        const target = elevatedTargets.get(system);
+        let currentPosition;
+        let currentAnchor;
+        let currentOutward;
+        if (elevatedEnergy && formationRetargetActive && formationRetargetStarts.has(system)) {
+          const retargetEase = formationRetargetBlend * formationRetargetBlend * (3.0 - 2.0 * formationRetargetBlend);
+          const start = formationRetargetStarts.get(system);
+          currentPosition = start.position.clone().lerp(target.position, retargetEase);
+          currentAnchor = start.anchor.clone().lerp(target.anchor, retargetEase);
+          currentOutward = start.outward.clone().lerp(target.outward, retargetEase).normalize();
+        } else {
+          currentPosition = computeStagedOrbitPosition(system.earthPosition, system.surfaceNormal, target.position, easedElevateBlend);
+          currentAnchor = computeStagedOrbitPosition(system.earthAnchor, system.surfaceNormal, target.anchor, easedElevateBlend);
+          currentOutward = system.surfaceNormal.clone().lerp(target.outward, easedElevateBlend).normalize();
+        }
+        system.node.position.copy(currentPosition);
+        system.node.scale.setScalar(api.earthGroup.scale.x);
+        system.node.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), currentOutward);
+        system.currentPosition.copy(currentPosition);
+        system.currentAnchor.copy(currentAnchor);
+        system.currentOutward.copy(currentOutward);
         const colors = colorForState(system.state);
         system.dome.material.color.setHex(colors.dome);
         system.glow.material.color.setHex(colors.glow);
-        const pulse = system === focusedEnergySystem ? 1.06 + Math.sin(now * 2.2) * 0.05 : 1 + Math.sin(now + system.index) * 0.025;
-        system.dome.scale.setScalar(pulse);
-        system.glow.scale.setScalar(pulse * 1.05);
+        const isHighlighted = (selectedEnergySystem === system) || (selectedEnergySystem === null && focusedEnergySystem === system);
+        system.ring.material.color.setHex(isHighlighted ? COLORS.selectedRing : colors.ring);
+        const pulseWave = isHighlighted ? (0.5 + 0.5 * Math.sin(energyTime * 1.8)) : (0.5 + 0.5 * Math.sin(energyTime));
+        system.dome.scale.setScalar(isHighlighted ? (1.0 + pulseWave * 0.055) : (1.0 + Math.sin(energyTime) * 0.02));
+        system.glow.scale.setScalar(isHighlighted ? (1.02 + pulseWave * 0.095) : (1.0 + Math.sin(energyTime) * 0.02));
+        system.glow.material.opacity = isHighlighted ? (0.09 + pulseWave * 0.08) : 0.06;
       });
-      arcLines.forEach(({ system, line }) => {
-        line.visible = !!focusedEnergySystem;
-        line.geometry.dispose();
-        line.geometry = new THREE.BufferGeometry().setFromPoints(arcPoints(focusedEnergySystem, system));
+      if (elevateTransitionActive && !elevatedEnergy && typeof api.setOrbit === 'function') {
+        const freshState = api.getState();
+        const focusViewDir = focusedEnergySystem.earthPosition.clone().normalize();
+        const targetPhi = THREE.MathUtils.clamp(Math.asin(focusViewDir.y), -1.25, 1.25);
+        const targetTheta = Math.atan2(focusViewDir.x, focusViewDir.z);
+        api.setOrbit({
+          radius: freshState.orbit.radius + (descendCameraRadius - freshState.orbit.radius) * 0.04,
+          phi: freshState.orbit.phi + (targetPhi - freshState.orbit.phi) * 0.015,
+          theta: lerpAngle(freshState.orbit.theta, targetTheta, 0.015)
+        });
+        if (elevateBlend < 0.05) elevateTransitionActive = false;
+      }
+      const focusColors = colorForState(focusedEnergySystem.state);
+      arcLines.forEach(({ system, arc }) => {
+        arc.tubeCore.visible = !!focusedEnergySystem;
+        arc.tubeGlow.visible = !!focusedEnergySystem;
+        updateArcPositions(focusedEnergySystem.currentAnchor, system.currentAnchor, arc);
+        const targetColors = colorForState(system.state);
+        arc.tubeCore.material.uniforms.colorGoa.value.setHex(focusColors.pulse);
+        arc.tubeGlow.material.uniforms.colorGoa.value.setHex(focusColors.pulse);
+        arc.tubeCore.material.uniforms.colorSys.value.setHex(targetColors.pulse);
+        arc.tubeGlow.material.uniforms.colorSys.value.setHex(targetColors.pulse);
+        arc.tubeCore.material.uniforms.time.value = energyTime;
+        arc.tubeGlow.material.uniforms.time.value = energyTime;
       });
+      energyTime += 0.04;
     }
 
     const canvas = document.getElementById('c');
@@ -373,7 +713,16 @@
       if (hit) setSelected(hit);
     });
 
-    return { threeObject: group, threeParent: 'scene', update, systems, setSelected };
+    return {
+      threeObject: group,
+      threeParent: 'scene',
+      update,
+      systems,
+      setSelected,
+      setFocused,
+      toggleElevation,
+      resetElevation: resetElevationState
+    };
   }
 
   function createHealthLayer() {
@@ -882,8 +1231,12 @@
           selected: system === selectedEnergySystem,
           ringOpacity: system.ring.material.opacity,
           domeColor: system.dome.material.color.getHexString(),
+          x: world.x,
+          y: world.y,
+          z: world.z,
           screenX: (projected.x * 0.5 + 0.5) * rect.width + rect.left,
           screenY: (-projected.y * 0.5 + 0.5) * rect.height + rect.top,
+          screenZ: projected.z,
           visible: !!(energyLayer.threeObject && energyLayer.threeObject.visible)
         };
       }) : [],
@@ -924,9 +1277,12 @@
       if (energyMode) {
         healthMode = false;
         els.tooltip.style.display = 'none';
+        selectedEnergySystem = selectedEnergySystem || focusedEnergySystem;
+        if (energyLayer && energyLayer.setSelected && selectedEnergySystem) energyLayer.setSelected(selectedEnergySystem);
         showPanel('energy', selectedEnergySystem || focusedEnergySystem);
         if (els.openFiltersBtn) els.openFiltersBtn.classList.remove('visible');
       } else {
+        resetEnergyElevation();
         closePanel();
       }
       updateButtons();
@@ -935,6 +1291,8 @@
       healthMode = !healthMode;
       if (healthMode) {
         energyMode = false;
+        resetEnergyElevation();
+        selectedEnergySystem = null;
         showPanel('health');
         if (els.openFiltersBtn) els.openFiltersBtn.classList.remove('visible');
       } else {
@@ -947,8 +1305,15 @@
     els.openFiltersBtn.addEventListener('click', restorePanel);
     els.satisfiedBtn.addEventListener('click', () => { if (selectedEnergySystem) selectedEnergySystem.state = 'satisfied'; showPanel('energy', selectedEnergySystem); });
     els.notSatisfiedBtn.addEventListener('click', () => { if (selectedEnergySystem) selectedEnergySystem.state = 'notSatisfied'; showPanel('energy', selectedEnergySystem); });
-    els.focusEnergyBtn.addEventListener('click', () => { if (selectedEnergySystem) focusedEnergySystem = selectedEnergySystem; });
-    els.elevateBtn.addEventListener('click', () => { elevatedEnergy = !elevatedEnergy; els.elevateBtn.textContent = elevatedEnergy ? 'Descend' : 'Ascend'; });
+    els.focusEnergyBtn.addEventListener('click', () => {
+      if (!selectedEnergySystem) return;
+      if (energyLayer && typeof energyLayer.setFocused === 'function') energyLayer.setFocused(selectedEnergySystem);
+      else focusedEnergySystem = selectedEnergySystem;
+    });
+    els.elevateBtn.addEventListener('click', () => {
+      if (!selectedEnergySystem) return;
+      if (energyLayer && typeof energyLayer.toggleElevation === 'function') energyLayer.toggleElevation();
+    });
     els.healthPositiveBtn.addEventListener('click', () => { healthOnlyPositive = !healthOnlyPositive; if (healthOnlyPositive) healthOnlyNegative = false; updateButtons(); });
     els.healthNegativeBtn.addEventListener('click', () => { healthOnlyNegative = !healthOnlyNegative; if (healthOnlyNegative) healthOnlyPositive = false; updateButtons(); });
     els.healthClusterBtn.addEventListener('click', () => { healthClusterMode = !healthClusterMode; refreshHealth(); });
